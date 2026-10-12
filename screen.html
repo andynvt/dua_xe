@@ -97,7 +97,7 @@
   let top3 = new Set(); // id 3 người dẫn đầu, để tô sáng làn
   ws.onmessage = e => {
     const d = JSON.parse(e.data);
-    if (d.say) return commentate(d.say, d.urgent, d.lang);
+    if (d.say) return commentate(d.say, d.urgent, d.lang, d.tts);
     const prev = state; state = d; sounds(prev, d); updateUI();
   };
 
@@ -137,7 +137,7 @@
   function setMusic(phase, delay = 0.05) { music = MUSIC[phase]; step = 0; nextT = ac.currentTime + delay; }
   setMusic('lobby');
   setInterval(() => {
-    mus.gain.setTargetAtTime(window.speechSynthesis?.speaking ? 0.3 : 0.7, ac.currentTime, 0.1); // nhỏ nhạc khi bình luận viên nói
+    mus.gain.setTargetAtTime(playing || window.speechSynthesis?.speaking ? 0.3 : 0.7, ac.currentTime, 0.1); // nhỏ nhạc khi bình luận viên nói
     if (!music || ac.state !== 'running') return;
     nextT = Math.max(nextT, ac.currentTime); // tab bị treo thì bắt nhịp lại, không dồn nốt
     for (; nextT < ac.currentTime + 0.12; nextT += 15 / music.bpm, step++) music.step(step % 16, nextT, CHORDS[(step >> 4) % 4]);
@@ -178,25 +178,43 @@
     commentate(soundOn ? 'Đã bật nhạc' : 'Đã tắt nhạc');
   });
 
-  // Bình luận viên: hiện phụ đề + đọc bằng giọng có sẵn của trình duyệt (vi hoặc en). Phím M bật/tắt tiếng.
-  let muted = false, sayTimer;
+  // Bình luận viên: hiện phụ đề + đọc bằng OpenAI TTS (server stream mp3 qua /tts/<id>).
+  // Không có key hoặc TTS lỗi thì đọc bằng giọng có sẵn của trình duyệt. Phím M bật/tắt tiếng.
+  let muted = false, sayTimer, queue = [], playing = null;
   // macOS có cả giọng 'vui' (Albert, Bad News…) đứng đầu danh sách tiếng Anh, nên ưu tiên giọng chuẩn
   const voiceFor = lang => {
     const vs = speechSynthesis.getVoices().filter(v => v.lang.replace('_', '-').toLowerCase().startsWith(lang));
     return vs.find(v => /Samantha|Google US English|Daniel|Karen|Linh/.test(v.name)) || vs[0];
   };
-  function commentate(text, urgent, lang = 'vi') {
-    $('say').textContent = text; $('say').classList.remove('old');
-    clearTimeout(sayTimer); sayTimer = setTimeout(() => $('say').classList.add('old'), 1500 + text.length * 70);
-    if (muted || !('speechSynthesis' in window)) return;
-    if (urgent) speechSynthesis.cancel();
+  function browserSay(text, lang) {
+    if (!('speechSynthesis' in window)) return;
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang === 'en' ? 'en-US' : 'vi-VN'; u.voice = voiceFor(lang) || null; u.rate = 1.15; u.pitch = 1.1;
     speechSynthesis.speak(u);
   }
+  function hush() { queue = []; if (playing) playing.pause(); playing = null; window.speechSynthesis?.cancel(); }
+  function playNext() { // phát lần lượt, câu sau chờ câu trước đọc xong
+    const c = queue.shift();
+    if (!c) return void (playing = null);
+    const a = playing = new Audio(`/tts/${c.tts}`);
+    let done = false;
+    const next = fallback => { if (done) return; done = true; if (fallback) browserSay(c.text, c.lang); if (playing === a) playNext(); };
+    a.onended = () => next(false);
+    a.onerror = () => next(true);
+    a.play().catch(() => next(true));
+  }
+  function commentate(text, urgent, lang = 'vi', tts = 0) {
+    $('say').textContent = text; $('say').classList.remove('old');
+    clearTimeout(sayTimer); sayTimer = setTimeout(() => $('say').classList.add('old'), 1500 + text.length * 70);
+    if (muted) return;
+    if (urgent) hush();
+    if (!tts) return browserSay(text, lang);
+    queue.push({ text, lang, tts });
+    if (!playing) playNext();
+  }
   addEventListener('keydown', e => {
     if (e.key.toLowerCase() !== 'm') return;
-    muted = !muted; if (muted) speechSynthesis.cancel();
+    muted = !muted; if (muted) hush();
     commentate(muted ? 'Đã tắt tiếng bình luận' : 'Đã bật tiếng bình luận');
   });
   addEventListener('keydown', e => {

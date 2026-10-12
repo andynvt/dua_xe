@@ -1,4 +1,5 @@
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
+const { Readable } = require('stream');
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
 const createCommentator = require('./commentator');
@@ -19,7 +20,7 @@ async function joinUrl(req) {
   return 'http://' + req.headers.host;
 }
 
-const pages = { '/': 'phone.html', '/screen': 'screen.html' };
+const pages = { '/': 'phone.html', '/screen': 'screen.html', '/slides': 'slides.html' };
 const assets = {
   '/assets/scooter.png': 'assets/scooter.png',
   '/assets/pothole.png': 'assets/pothole.png',
@@ -33,6 +34,19 @@ const server = http.createServer(async (req, res) => {
     const u = await joinUrl(req);
     res.writeHead(200, { 'content-type': 'application/json' });
     return res.end(JSON.stringify({ url: u, svg: await QRCode.toString(u, { type: 'svg', margin: 1 }) }));
+  }
+  if (url.pathname.startsWith('/tts/')) {
+    const text = said.get(+url.pathname.slice(5));
+    if (!text || !cmt.ai) { res.writeHead(404); return res.end(); }
+    try {
+      const r = await cmt.speech(text);
+      if (!r.ok) throw new Error(`HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
+      res.writeHead(200, { 'content-type': 'audio/mpeg' });
+      return Readable.fromWeb(r.body).pipe(res);
+    } catch (err) {
+      console.warn('OpenAI TTS lỗi:', err.message);
+      res.writeHead(502); return res.end();
+    }
   }
   if (assets[url.pathname]) {
     try {
@@ -57,8 +71,15 @@ let nextId = 1;
 let game = { phase: 'lobby', startAt: 0, finished: 0 };
 
 const ranking = () => [...players.values()].sort((a, b) => (a.place || 1e9) - (b.place || 1e9) || b.pos - a.pos);
+// /tts/<id> chỉ đọc câu bình luận viên vừa nói, để người ngoài qua tunnel không đốt credit bằng text tùy ý
+const said = new Map();
+let sayId = 0;
 const cmt = createCommentator({
-  say: (text, urgent) => { const m = JSON.stringify({ say: text, urgent, lang: cmt.lang }); for (const s of screens) s.send(m); },
+  say: (text, urgent) => {
+    said.set(++sayId, text); said.delete(sayId - 50);
+    const m = JSON.stringify({ say: text, urgent, lang: cmt.lang, tts: cmt.ai ? sayId : 0 });
+    for (const s of screens) s.send(m);
+  },
   standings: () => ranking().slice(0, 3).map(p => ({ name: p.name, progress: `${Math.round(p.pos / TRACK * 100)}%`, place: p.place })),
 });
 
@@ -137,5 +158,5 @@ setInterval(() => {
 server.listen(PORT, () => {
   console.log(`Đua Xe Ôm chạy tại http://localhost:${PORT}`);
   console.log(`Màn hình host: http://localhost:${PORT}/screen?key=${HOST_KEY}  (Space = bắt đầu)`);
-  console.log(`Bình luận viên [${cmt.lang}]: ${cmt.ai ? 'AI (' + (process.env.OPENAI_MODEL || 'gpt-5-mini') + ')' : 'câu mẫu (đặt OPENAI_API_KEY để bật AI)'}`);
+  console.log(`Bình luận viên [${cmt.lang}]: ${cmt.ai ? 'AI (' + (process.env.OPENAI_MODEL || 'gpt-5-mini') + ')' : 'câu mẫu (đặt OPENAI_API_KEY để bật AI)'}, giọng: ${cmt.ai ? 'OpenAI TTS' : 'trình duyệt'}`);
 });
