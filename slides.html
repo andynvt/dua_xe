@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moto Taxi Race — Demo</title>
+<style>
+  :root { --bg: #16130f; --fg: #f8f1e7; --muted: #a89f94; --card: #231e18; --line: #3a332b; --accent: #ff7a1a; --teal: #20c997; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg);
+    font: 2.4vmin/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  section { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center;
+    padding: 6vh 8vw; text-align: center; opacity: 0; visibility: hidden; transform: translateX(4vw); transition: .4s; }
+  section.on { opacity: 1; visibility: visible; transform: none; }
+  section.prev { transform: translateX(-4vw); }
+  h1 { font-size: 9vmin; margin: 0; line-height: 1.05; }
+  h2 { font-size: 5.5vmin; margin: 0 0 4vh; }
+  p { margin: .4em 0; }
+  .big { font-size: 4vmin; }
+  .muted { color: var(--muted); }
+  .accent { color: var(--accent); }
+  .kicker { color: var(--accent); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; font-size: 2vmin; margin: 0 0 1vh; }
+  .row { display: flex; gap: 2.5vw; justify-content: center; align-items: stretch; width: 100%; }
+  .card { background: var(--card); border: 2px solid var(--line); border-radius: 2vmin; padding: 3vmin; flex: 1 1 0; max-width: 38vw; }
+  .card b { display: block; font-size: 3.2vmin; margin-bottom: .4em; }
+  .card .ico { font-size: 7vmin; display: block; margin-bottom: 1vh; }
+  .card img { height: 9vmin; display: block; margin: 0 auto 1vh; }
+  .arrow { align-self: center; font-size: 5vmin; color: var(--accent); }
+  .stat b { font-size: 8vmin; color: var(--accent); margin: 0; }
+  .quote { font-size: 3.6vmin; font-style: italic; border-left: .6vmin solid var(--accent); padding: 1vh 2vw; text-align: left; margin: 3vh 0 0; }
+  code { font: .9em ui-monospace, Menlo, monospace; background: var(--line); padding: .1em .4em; border-radius: .4em; }
+  .road { position: relative; width: 100%; height: 16vmin; margin-top: 5vh; background: #3d3b38;
+    border-top: .5vmin solid #fff; border-bottom: .5vmin solid #fff; overflow: hidden; }
+  .road::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: .5vmin dashed #ffd43b; }
+  /* xe chạy đều tới 60% thì bánh trước rơi vào ổ gà: khựng lại, chạy 4 frame sprite đụng ổ gà như trong game, rồi chạy tiếp.
+     Vị trí ổ gà tính theo cùng công thức với keyframe nên khớp ở mọi tỉ lệ màn hình. */
+  .road img.pothole { position: absolute; left: calc(60% + 1.7vmin); bottom: 1vmin; height: 5vmin; }
+  .road .rider { position: absolute; bottom: 1vmin; width: 17.33vmin; height: 13vmin; animation: ride 5s linear infinite; }
+  .rider > * { position: absolute; animation: 5s step-end infinite; }
+  .rider .ok { inset: 0; width: 100%; height: 100%; animation-name: ok; }
+  .rider .hurt { inset: 0; background: url(assets/scooter-hurt.png) 0 0 / 400% 100%; opacity: 0; animation-name: hurt; }
+  .rider .boom { width: 6vmin; right: 0; top: 0; opacity: 0; animation-name: hurt; }
+  @keyframes ride { 0% { left: -20vmin; } 60% { left: calc(60% - 8vmin); } 76% { left: calc(60% - 7vmin); } 100% { left: 100%; } }
+  @keyframes ok { 0% { opacity: 1; } 60% { opacity: 0; } 76% { opacity: 1; } }
+  @keyframes hurt { 0% { opacity: 0; } 60% { opacity: 1; background-position: 0 0; } 64% { background-position: 33.333% 0; }
+    68% { background-position: 66.667% 0; } 72% { background-position: 100% 0; } 76% { opacity: 0; } }
+  .cta { font-size: 12vmin; font-weight: 800; color: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.06); } }
+  .vote { width: min(70vw, 110vmin); margin-top: 3vh; border-radius: 2vmin; box-shadow: 0 0 0 .6vmin var(--accent); }
+  .cta img { height: 1.2em; vertical-align: middle; }
+  ol { text-align: left; font-size: 3.4vmin; margin: 0; }
+  li { margin: 1vh 0; }
+  #bar { position: fixed; left: 0; bottom: 0; height: .6vmin; background: var(--accent); transition: width .4s; }
+  #num { position: fixed; right: 2vw; bottom: 2vh; color: var(--muted); font-size: 1.8vmin; }
+  @media (prefers-reduced-motion: reduce) { section, .road .rider, .rider > *, .cta { transition: none; animation: none; } }
+</style>
+</head>
+<body>
+
+<section>
+  <h1>🛵 Moto Taxi Race</h1>
+  <p class="big muted">The whole room races together in 60 seconds</p>
+  <div class="road"><img class="pothole" src="assets/pothole.png" alt=""><div class="rider"><img class="ok" src="assets/scooter.png" alt="Moto taxi"><div class="hurt"></div><img class="boom" src="assets/impact.png" alt=""></div></div>
+  <p class="big" style="margin-top:4vh">Team <span class="accent">3T</span></p>
+  <p class="muted">DevDay Exchange Community HCMC · 12/10/2026</p>
+</section>
+
+<section>
+  <p class="kicker">1 · How to play</p>
+  <h2>3 steps to hop on</h2>
+  <div class="row">
+    <div class="card"><span class="ico">📷</span><b>Scan the QR</b>No app, no sign-up, no shared Wi‑Fi needed.</div>
+    <div class="arrow">→</div>
+    <div class="card"><span class="ico">✍️</span><b>Enter your name</b>Your bike appears at the starting line instantly.</div>
+    <div class="arrow">→</div>
+    <div class="card"><span class="ico">👆</span><b>Tap like crazy</b>Every tap moves your bike forward a bit.</div>
+  </div>
+</section>
+
+<section>
+  <p class="kicker">1 · How to play</p>
+  <h2>Rules</h2>
+  <div class="row">
+    <div class="card"><img src="assets/pothole.png" alt=""><b>Saigon potholes</b>Every lane has random potholes. Hit one and your bike stalls and your phone buzzes.</div>
+    <div class="card"><span class="ico">🏆</span><b>Top 3 ends the race</b>The first three across the line win. 60 seconds max.</div>
+    <div class="card"><span class="ico">🤖</span><b>Don't cheat</b>The server only accepts ~15 taps/second. Devtools won't help.</div>
+  </div>
+  <p class="muted" style="margin-top:4vh">Up to 30 racers per race; latecomers wait for the next one.</p>
+</section>
+
+<section>
+  <p class="kicker">2 · Try it</p>
+  <div class="cta">Phones out!</div>
+  <p class="big">Scan the QR on screen · enter your name · wait for 3‑2‑1</p>
+</section>
+
+<section>
+  <p class="kicker">3 · Tech</p>
+  <h2>Architecture</h2>
+  <div class="row">
+    <div class="card"><span class="ico">📱</span><b>Phone</b>Plain HTML + JS</div>
+    <div class="arrow">⇄</div>
+    <div class="card"><span class="ico">☁️</span><b>Cloudflare Tunnel</b>https / wss, link goes straight into the QR</div>
+    <div class="arrow">⇄</div>
+    <div class="card"><span class="ico">💻</span><b>Node + ws</b>Runs on a laptop, holds all the state</div>
+    <div class="arrow">⇄</div>
+    <div class="card"><span class="ico">🖥️</span><b>Big screen</b>Canvas 2D + PNG sprites</div>
+  </div>
+  <p class="muted" style="margin-top:4vh">No deploy, no cold start, no shared Wi‑Fi: every connection goes through Cloudflare.</p>
+</section>
+
+<section>
+  <p class="kicker">3 · Tech</p>
+  <h2>Real‑time for 30 players</h2>
+  <div class="row">
+    <div class="card"><span class="ico">👆</span><b>100 ms tap batching</b>Phones add up taps and send one message every 100 ms.</div>
+    <div class="card"><span class="ico">📡</span><b>50 ms tick</b>The screen gets the full state; phones only get their own slice so the tunnel doesn't choke.</div>
+    <div class="card"><span class="ico">🛡️</span><b>Server decides</b>Token bucket ~15 taps/second, malformed JSON ignored.</div>
+  </div>
+  <p class="muted" style="margin-top:4vh">A room full of devs: someone will definitely send <code>taps: 99999</code>.</p>
+</section>
+
+<section>
+  <p class="kicker">3 · Tech</p>
+  <h2>🎙️ AI commentator</h2>
+  <div class="row">
+    <div class="card"><b>Events</b>Join, overtake, pothole, finish</div>
+    <div class="arrow">→</div>
+    <div class="card"><b>LLM</b>One sentence ≤ 15 words with Saigon flavor. Over 2.5 seconds, fall back to a template line</div>
+    <div class="arrow">→</div>
+    <div class="card"><b>Web Speech</b>The screen reads it aloud and ducks the music while speaking</div>
+  </div>
+  <p class="quote">"Saigon potholes show no mercy to Tuan!"</p>
+</section>
+
+<section>
+  <p class="kicker">3 · Tech</p>
+  <h2>By the numbers</h2>
+  <div class="row">
+    <div class="card stat"><b>0</b>apps to install</div>
+    <div class="card stat"><b>5s</b>from QR scan to racing</div>
+    <div class="card stat"><b>30</b>racers per race</div>
+    <div class="card stat"><b>2</b>dependencies: <code>ws</code>, <code>qrcode</code></div>
+  </div>
+</section>
+
+<section>
+  <h2>What's next</h2>
+  <ol>
+    <li><b>Room codes + always-on hosting</b>: many events running in parallel.</li>
+    <li><b>Corporate party package</b>: team building, year-end parties, weddings, custom branding.</li>
+    <li><b>Mini‑game platform</b>: the same QR + phone-as-controller setup for quizzes, polls, trivia.</li>
+  </ol>
+</section>
+
+<section>
+  <h1>Thank you! 🏁</h1>
+  <p class="big">Had fun?</p>
+  <div class="cta"><img src="assets/scooter.png" alt=""> Vote for 3T!</div>
+  <p class="quote">Play it once, remember it. Remember it, vote for it.</p>
+  <p class="muted" style="margin-top:4vh">Team 3T · github.com/andynvt/dua_xe</p>
+  <img class="vote" src="assets/vote-card.png" alt="3T voting card: tap 👍 to vote">
+</section>
+
+<div id="bar"></div><div id="num"></div>
+<script>
+  const S = [...document.querySelectorAll('section')];
+  let i = 0;
+  function go(n) {
+    i = Math.max(0, Math.min(S.length - 1, n));
+    S.forEach((s, k) => { s.classList.toggle('on', k === i); s.classList.toggle('prev', k < i); });
+    document.getElementById('bar').style.width = `${(i + 1) / S.length * 100}%`;
+    document.getElementById('num').textContent = `${i + 1} / ${S.length}`;
+    history.replaceState(null, '', `#${i + 1}`);
+  }
+  addEventListener('keydown', e => {
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(e.key)) go(i + 1);
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key)) go(i - 1);
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(S.length - 1);
+    else if (e.key === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  });
+  addEventListener('click', e => go(e.clientX < innerWidth / 3 ? i - 1 : i + 1));
+  const fromHash = () => go((parseInt(location.hash.slice(1)) || 1) - 1);
+  addEventListener('hashchange', fromHash);
+  fromHash();
+</script>
+</body>
+</html>

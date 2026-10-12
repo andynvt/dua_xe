@@ -1,0 +1,91 @@
+{
+  "ok": true,
+  "engine": "component-row",
+  "engine_revision": "eefb11102d10",
+  "extract_args": {},
+  "run_dir": "/Users/andy/Desktop/Project/dua_Xe/assets/generated/sprites/scooter-hurt",
+  "cell": {
+    "shape": "rect",
+    "width": 256,
+    "height": 192,
+    "safe_margin_x": 8,
+    "safe_margin_y": 8
+  },
+  "chroma_key": {
+    "name": "magenta",
+    "hex": "#FF00FF",
+    "rgb": [
+      255,
+      0,
+      255
+    ],
+    "selection": "manual"
+  },
+  "rows": [
+    {
+      "state": "hurt_right",
+      "frames": 4,
+      "method": "components",
+      "files": [
+        "frames/hurt_right/frame-0.png",
+        "frames/hurt_right/frame-1.png",
+        "frames/hurt_right/frame-2.png",
+        "frames/hurt_right/frame-3.png"
+      ],
+      "frame_records": [
+        {
+          "index": 0,
+          "nontransparent_pixels": 18468,
+          "bbox": [
+            30,
+            8,
+            225,
+            184
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 0
+        },
+        {
+          "index": 1,
+          "nontransparent_pixels": 19398,
+          "bbox": [
+            28,
+            8,
+            227,
+            184
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 0
+        },
+        {
+          "index": 2,
+          "nontransparent_pixels": 17290,
+          "bbox": [
+            33,
+            8,
+            222,
+            184
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 0
+        },
+        {
+          "index": 3,
+          "nontransparent_pixels": 18450,
+          "bbox": [
+            30,
+            8,
+            225,
+            184
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 0
+        }
+      ],
+      "ok": true,
+      "engine_revision": "eefb11102d10"
+    }
+  ],
+  "errors": [],
+  "warnings": []
+}

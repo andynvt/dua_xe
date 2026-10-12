@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "kind": "sprite-gen-gif-run",
+  "run_dir": "/Users/andy/Desktop/Project/dua_Xe/assets/generated/sprites/scooter-hurt",
+  "exports": [
+    {
+      "state": "hurt_right",
+      "output": "/Users/andy/Desktop/Project/dua_Xe/assets/generated/sprites/scooter-hurt/exports/hurt_right.gif",
+      "frames": 4,
+      "fps": 5.0,
+      "loop": false,
+      "gif_report": {
+        "path": "/Users/andy/Desktop/Project/dua_Xe/assets/generated/sprites/scooter-hurt/exports/hurt_right.gif",
+        "frames": 4,
+        "delay_ticks": [
+          20,
+          20,
+          20,
+          20
+        ],
+        "loop": 0,
+        "transparent": true,
+        "disposal": [
+          2,
+          2,
+          2,
+          2
+        ]
+      }
+    }
+  ]
+}

@@ -61,22 +61,6 @@ const WHAT = {
   finish: 'this rider just crossed the finish line in this place',
 };
 
-// Giọng đọc OpenAI TTS: server gọi rồi stream mp3 cho màn hình, key không bao giờ xuống trình duyệt
-const TTS_MODEL = process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts', TTS_VOICE = process.env.OPENAI_TTS_VOICE || 'ash';
-const TTS_STYLE = {
-  vi: 'Bình luận viên đua xe sôi nổi, nói nhanh, hào hứng, giọng miền Nam.',
-  en: 'Hyped live motorsport commentator: fast, loud, excited, big energy.',
-}[LANG];
-function speech(text) {
-  const body = { model: TTS_MODEL, voice: TTS_VOICE, input: text, response_format: 'mp3' };
-  if (TTS_MODEL.includes('4o')) body.instructions = TTS_STYLE; // tts-1 không nhận instructions
-  return fetch('https://api.openai.com/v1/audio/speech', {
-    method: 'POST', signal: AbortSignal.timeout(8000),
-    headers: { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
-
 let aiWarned = false;
 async function aiLine(e, top) {
   const body = {
@@ -130,7 +114,7 @@ module.exports = function createCommentator({ say, standings }) {
   }
 
   const timer = setInterval(speakNext, 200);
-  return { event, stop: () => clearInterval(timer), ai: !!KEY, lang: LANG, speech };
+  return { event, stop: () => clearInterval(timer), ai: !!KEY, lang: LANG };
 };
 
 if (require.main === module) {

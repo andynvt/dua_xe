@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "kind": "sprite-gen-request",
+  "engine": "component-row",
+  "character": {
+    "id": "scooter-hurt",
+    "description": "Vietnamese motorcycle taxi rider on an orange scooter facing right, helmet and teal shirt, same character as base",
+    "base_image": "base-source.png"
+  },
+  "cell": {
+    "shape": "rect",
+    "width": 256,
+    "height": 192,
+    "safe_margin_x": 8,
+    "safe_margin_y": 8
+  },
+  "chroma_key": {
+    "name": "magenta",
+    "hex": "#FF00FF",
+    "rgb": [
+      255,
+      0,
+      255
+    ],
+    "selection": "manual"
+  },
+  "states": {
+    "hurt_right": {
+      "frames": 4,
+      "fps": 5,
+      "loop": false,
+      "action": "One non-loop pothole bump, right-facing side view throughout. Frame 1 neutral seated riding pose matching the reference. Frame 2 scooter front suspension dips and rider torso leans forward with bent elbows, both hands remain on handlebars. Frame 3 suspension rebounds with front wheel subtly raised and rider torso leaning slightly back, controlled small movement. Frame 4 recovery to the original neutral reference pose. Same rider, same scooter, identical wheelbase, helmet, clothing, body proportions and subject size throughout. Do not include potholes, impact bursts, road, shadows or detached effects. Four complete, clearly separated scooter+rider silhouettes in one horizontal row, each fully visible with ample separation. Keep wheel-contact baselines consistent except the deliberately small front-wheel rebound. Critical geometry lock: all four poses must have the SAME overall silhouette width and height, identical tire diameters and wheelbase. Keep the helmet top at the same height in all four invisible frame slots. In the forward-lean frame, extend the neck and bend elbows while preserving helmet height; do not crouch the whole rider downward or enlarge the scooter. In the rebound frame, lift the front wheel only slightly (about 5 degrees), bend the rider posture to preserve overall height. Only joints and suspension change; the complete scooter+rider bounding box remains constant. This avoids frame-by-frame size normalization changing wheel diameters."
+    }
+  },
+  "style": "clean smooth 2D cartoon, bold outlines, flat cel shading, preserve reference design, not pixel art",
+  "layout": "taxonomy/v1",
+  "fit": {
+    "resample": "lanczos",
+    "align_x": "bbox-center",
+    "align_y": "bottom",
+    "ground_frames": false,
+    "pixel_unfake": false
+  },
+  "chroma": {
+    "mode": "rgb",
+    "unmix_reach": 4,
+    "spill_max_fraction": 0.005
+  }
+}
