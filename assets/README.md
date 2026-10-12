@@ -8,9 +8,12 @@ Tạo ngày 12/10/2026 bằng GPT ImageGen có sẵn trong Codex, theo bộ asse
 | scooter.png | 256 × 192 | Xe đua nhìn ngang, quay sang phải; icon tiêu đề và nút TAP |
 | pothole.png | 128 × 64 | Ổ gà trên đường đua |
 | impact.png | 128 × 128 | Hiệu ứng trúng ổ gà |
+| scooter-hurt.png | 1024 × 192 | Atlas 4 frame đụng ổ gà, mỗi frame 256 × 192 |
 
-Đây là ảnh tĩnh. Khi nạp sprite lỗi hoặc chưa hoàn tất, Canvas màn hình lớn dùng emoji dự phòng.
-Chỉ ba PNG được phục vụ qua `/assets/`; tài liệu này không được public bởi server.
+Ba PNG đầu là ảnh tĩnh. Animation `hurt_right` chạy 4 frame × 200 ms, không lặp, khớp 800 ms choáng. Khi atlas chưa nạp được, game dùng xe tĩnh; Canvas màn hình lớn còn có emoji dự phòng.
+`hurt-animation.js` dùng tọa độ frame và thời gian từ manifest của sprite-gen, đồng hồ riêng cho từng xe, reset khi hết choáng. Server chỉ phục vụ asset trong danh sách cho phép; tài liệu này không được public.
+
+Nguồn, prompt và báo cáo animation nằm trong [generated/sprites/scooter-hurt](generated/sprites/scooter-hurt). Xem [GIF preview](generated/sprites/scooter-hurt/exports/hurt_right.gif), [manifest](generated/sprites/scooter-hurt/manifest.json), [motion QA](generated/sprites/scooter-hurt/qa-notes.md).
 
 ## Prompt xe ôm
 

@@ -1,10 +1,11 @@
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
+const createCommentator = require('./commentator');
 
 const PORT = process.env.PORT || 3000;
 const HOST_KEY = process.env.HOST_KEY || crypto.randomBytes(3).toString('hex');
-const TRACK = 100, COUNTDOWN_MS = 3000, RACE_MAX_MS = 60000, STUN_MS = 800, MAX_PLAYERS = 30;
+const TRACK = 250, COUNTDOWN_MS = 3000, RACE_MAX_MS = 60000, STUN_MS = 800, MAX_PLAYERS = 30;
 const TAPS_PER_MS = 0.015, TAP_BURST = 5; // tối đa ~15 tap/giây, người thật tap ~8-12
 
 // Link cho người chơi: PUBLIC_URL > link tunnel hỏi từ cloudflared (`npm run tunnel`) > chính địa chỉ đang mở
@@ -23,6 +24,8 @@ const assets = {
   '/assets/scooter.png': 'assets/scooter.png',
   '/assets/pothole.png': 'assets/pothole.png',
   '/assets/impact.png': 'assets/impact.png',
+  '/assets/scooter-hurt.png': 'assets/scooter-hurt.png',
+  '/assets/hurt-animation.js': 'assets/hurt-animation.js',
 };
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -34,7 +37,7 @@ const server = http.createServer(async (req, res) => {
   if (assets[url.pathname]) {
     try {
       const image = await fs.promises.readFile(path.join(__dirname, assets[url.pathname]));
-      res.writeHead(200, { 'content-type': 'image/png' });
+      res.writeHead(200, { 'content-type': url.pathname.endsWith('.js') ? 'text/javascript; charset=utf-8' : 'image/png' });
       return res.end(image);
     } catch (err) {
       res.writeHead(err.code === 'ENOENT' ? 404 : 500);
@@ -53,12 +56,21 @@ const screens = new Set();
 let nextId = 1;
 let game = { phase: 'lobby', startAt: 0, finished: 0 };
 
-const randomHoles = () => [20, 45, 70].map(h => h + Math.floor(Math.random() * 15));
+const ranking = () => [...players.values()].sort((a, b) => (a.place || 1e9) - (b.place || 1e9) || b.pos - a.pos);
+const cmt = createCommentator({
+  say: (text, urgent) => { const m = JSON.stringify({ say: text, urgent, lang: cmt.lang }); for (const s of screens) s.send(m); },
+  standings: () => ranking().slice(0, 3).map(p => ({ name: p.name, progress: `${Math.round(p.pos / TRACK * 100)}%`, place: p.place })),
+});
+
+// ~3 ổ gà mỗi 100 đơn vị, rải đều trên đường + lệch ngẫu nhiên để mỗi làn khác nhau
+const HOLES = Math.round(TRACK * 0.03), GAP = TRACK / (HOLES + 1);
+const randomHoles = () => Array.from({ length: HOLES }, (_, i) => Math.floor(GAP * (i + 0.7) + Math.random() * GAP * 0.6));
 
 function newRace() {
   if (game.phase === 'countdown' || game.phase === 'race') return;
   for (const p of players.values()) Object.assign(p, { pos: 0, place: 0, stunUntil: 0, holes: randomHoles() });
-  game = { phase: 'countdown', startAt: Date.now() + COUNTDOWN_MS, finished: 0 };
+  game = { phase: 'countdown', startAt: Date.now() + COUNTDOWN_MS, finished: 0, leaderId: 0 };
+  cmt.event({ type: 'countdown', n: players.size });
 }
 
 function addTaps(p, n) {
@@ -70,8 +82,8 @@ function addTaps(p, n) {
   p.budget -= k;
   const before = p.pos;
   p.pos = Math.min(TRACK, p.pos + k);
-  if (p.holes.some(h => before < h && p.pos >= h)) p.stunUntil = now + STUN_MS;
-  if (p.pos >= TRACK) p.place = ++game.finished;
+  if (p.holes.some(h => before < h && p.pos >= h)) { p.stunUntil = now + STUN_MS; cmt.event({ type: 'stun', names: [p.name] }); }
+  if (p.pos >= TRACK) { p.place = ++game.finished; cmt.event({ type: 'finish', names: [p.name], place: p.place }); }
 }
 
 wss.on('connection', ws => {
@@ -84,6 +96,7 @@ wss.on('connection', ws => {
         pos: 0, place: 0, stunUntil: 0, holes: randomHoles(), budget: TAP_BURST, lastTap: Date.now() };
       players.set(ws, p);
       ws.send(JSON.stringify({ you: p.id, hue: p.hue }));
+      if (game.phase === 'lobby') cmt.event({ type: 'join', names: [p.name] });
     } else if (d.join && !players.has(ws)) ws.send(JSON.stringify({ full: MAX_PLAYERS }));
     if (d.taps && players.has(ws)) addTaps(players.get(ws), d.taps);
     if (d.screen) screens.add(ws);
@@ -95,12 +108,20 @@ wss.on('connection', ws => {
 setInterval(() => {
   const now = Date.now();
   const ps = [...players.values()];
-  if (game.phase === 'countdown' && now >= game.startAt) game.phase = 'race';
-  if (game.phase === 'race' && (game.finished >= 3 || (ps.length && ps.every(p => p.place)) || now - game.startAt > RACE_MAX_MS))
+  if (game.phase === 'countdown' && now >= game.startAt) { game.phase = 'race'; cmt.event({ type: 'go' }); }
+  const ranked = ranking();
+  if (game.phase === 'race' && (game.finished >= 3 || (ps.length && ps.every(p => p.place)) || now - game.startAt > RACE_MAX_MS)) {
     game.phase = 'done';
+    cmt.event({ type: 'done', names: ranked.filter(p => p.place).map(p => p.name) });
+  }
+  const leader = ranked[0];
+  if (game.phase === 'race' && !game.finished && leader && leader.pos > 0 && leader.id !== game.leaderId) {
+    const prev = ps.find(p => p.id === game.leaderId);
+    game.leaderId = leader.id;
+    cmt.event({ type: 'lead', names: [leader.name], prev: prev?.name });
+  }
 
   const cd = Math.max(0, game.startAt - now);
-  const ranked = [...ps].sort((a, b) => (a.place || 1e9) - (b.place || 1e9) || b.pos - a.pos);
   const rank = new Map(ranked.map((p, i) => [p, i + 1]));
 
   // màn hình nhận toàn bộ state, điện thoại chỉ nhận phần của mình để tunnel không bị nghẽn
@@ -116,4 +137,5 @@ setInterval(() => {
 server.listen(PORT, () => {
   console.log(`Đua Xe Ôm chạy tại http://localhost:${PORT}`);
   console.log(`Màn hình host: http://localhost:${PORT}/screen?key=${HOST_KEY}  (Space = bắt đầu)`);
+  console.log(`Bình luận viên [${cmt.lang}]: ${cmt.ai ? 'AI (' + (process.env.OPENAI_MODEL || 'gpt-5-mini') + ')' : 'câu mẫu (đặt OPENAI_API_KEY để bật AI)'}`);
 });

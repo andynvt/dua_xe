@@ -3,10 +3,12 @@
 <head>
 <meta charset="utf-8">
 <title>Đua Xe Ôm: màn hình</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Bungee&display=swap&subset=vietnamese" rel="stylesheet">
 <style>
-  html, body { margin: 0; height: 100%; background: #2b2a28; color: #fff; font-family: system-ui, sans-serif; overflow: hidden; }
+  html, body { margin: 0; height: 100%; background: #2b2a28; color: #fff; font-family: 'Baloo 2', system-ui, sans-serif; overflow: hidden; }
   canvas { display: block; width: 100vw; height: 100vh; }
   header { position: fixed; top: 0; left: 0; right: 0; height: 110px; display: flex; align-items: center; gap: 24px; padding: 0 24px; }
+  h1, #big, #podium { font-family: Bungee, 'Baloo 2', sans-serif; font-weight: 400; }
   header h1 { margin: 0; font-size: 2.4rem; white-space: nowrap; }
   .logo { width: 1.5em; height: 1.15em; object-fit: contain; vertical-align: middle; }
   #status { font-size: 1.6rem; color: #ffd8a8; }
@@ -33,34 +35,43 @@
   #podium { font-size: 3rem; font-weight: 800; line-height: 1.5; background: #000a; padding: 24px 48px; border-radius: 20px; }
   #podium:empty { display: none; }
   #hint { position: fixed; bottom: 12px; left: 24px; color: #999; }
+  /* phụ đề bình luận viên */
+  #say { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); max-width: 80vw; z-index: 5;
+    background: #000c; border: 2px solid #ffd43b; border-radius: 14px; padding: 10px 22px;
+    font-size: 1.8rem; font-weight: 800; text-align: center; transition: opacity .4s; pointer-events: none; }
+  #say:empty, #say.old { opacity: 0; }
+  #say::before { content: '🎙️ '; }
   /* lúc đua: header gọn lại, nhường chỗ cho làn đường */
   body:not(.lobby) header { height: 60px; }
   body:not(.lobby) header h1 { font-size: 1.6rem; }
   body.race #hint, body.countdown #hint { display: none; }
-  #top { display: none; position: fixed; top: 140px; right: 16px; width: 300px; box-sizing: border-box; margin: 0; padding: 12px 16px; list-style-position: inside;
-    background: #000a; border-radius: 14px; font-size: 1.5rem; font-weight: 700; line-height: 1.6; }
-  body.race #top, body.done #top { display: block; }
-  #top li { color: hsl(var(--h) 80% 72%); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* top 5 nằm ngang trên header để đường đua dùng hết chiều ngang */
+  #top { display: none; flex: 1; gap: 20px; margin: 0 150px 0 0; padding: 0; list-style-position: inside;
+    font-size: 1.4rem; font-weight: 700; overflow: hidden; }
+  body.race #top, body.done #top { display: flex; }
+  #top li { color: hsl(var(--h) 80% 72%); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
   #top li::marker { color: #fff; }
   #top small { color: #fff8; font-size: 1rem; font-weight: 600; margin-left: 6px; }
 </style>
 </head>
 <body class="lobby">
 <canvas id="c"></canvas>
-<header><h1><img class="logo" src="/assets/scooter.png" alt=""> ĐUA XE ÔM</h1><div id="status">Đang kết nối…</div></header>
+<header><h1><img class="logo" src="/assets/scooter.png" alt=""> ĐUA XE ÔM</h1><div id="status">Đang kết nối…</div><ol id="top"></ol></header>
 <div id="qr"><div id="qrimg" role="img" aria-label="QR tham gia"></div><span>Quét để vào đua!</span><span id="joinurl"></span></div>
 <div id="overlay"><div id="big"></div><div id="podium"></div></div>
 <div id="hint"></div>
-<ol id="top"></ol>
+<div id="say"></div>
+<script src="/assets/hurt-animation.js"></script>
 <script>
   const $ = id => document.getElementById(id);
   const key = new URLSearchParams(location.search).get('key');
   const ctx = $('c').getContext('2d');
-  const sprites = Object.fromEntries(['scooter', 'pothole', 'impact'].map(name => {
+  const sprites = Object.fromEntries(['scooter', 'pothole', 'impact', 'scooter-hurt'].map(name => {
     const image = new Image();
     image.src = `/assets/${name}.png`;
     return [name, image];
   }));
+  const hurt = new HurtAnimation();
   const ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
   const shown = new Map(); // id -> vị trí đang vẽ, để xe chạy mượt giữa các lần nhận state
   let state = { phase: 'lobby', players: [], track: 100 };
@@ -80,11 +91,114 @@
   refreshQR(); setInterval(refreshQR, 5000);
   $('qr').onclick = () => $('qr').classList.toggle('full');
   addEventListener('keydown', e => e.key === 'Escape' && $('qr').classList.remove('full'));
-  $('hint').textContent = key ? 'Space: bắt đầu / ván mới' : 'Chế độ xem: thêm ?key=… vào URL để điều khiển';
+  $('hint').textContent = (key ? 'Space: bắt đầu / ván mới' : 'Chế độ xem: thêm ?key=… vào URL để điều khiển') + ' · M: bật/tắt tiếng bình luận · N: bật/tắt nhạc';
   ws.onopen = () => ws.send(JSON.stringify({ screen: true }));
   ws.onclose = () => { $('status').textContent = 'Mất kết nối server'; };
   let top3 = new Set(); // id 3 người dẫn đầu, để tô sáng làn
-  ws.onmessage = e => { state = JSON.parse(e.data); updateUI(); };
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.say) return commentate(d.say, d.urgent, d.lang);
+    const prev = state; state = d; sounds(prev, d); updateUI();
+  };
+
+  // Nhạc nền + hiệu ứng: tổng hợp bằng Web Audio, không cần file. Trình duyệt chỉ cho phát sau khi bấm phím/chuột.
+  const ac = new AudioContext(), out = ac.createGain(), mus = ac.createGain();
+  out.connect(ac.destination); mus.connect(out);
+  addEventListener('keydown', () => ac.resume()); addEventListener('pointerdown', () => ac.resume());
+  const hz = n => 220 * 2 ** (n / 12); // n = số bán cung tính từ nốt La 220Hz
+  function tone(dest, n, t, dur, type, vol, slide) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(hz(n), t);
+    if (slide != null) o.frequency.exponentialRampToValueAtTime(hz(slide), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(dest); o.start(t); o.stop(t + dur);
+  }
+  const noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+  noiseBuf.getChannelData(0).forEach((_, i, d) => (d[i] = Math.random() * 2 - 1));
+  function noise(dest, t, dur, vol, freq) {
+    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = noiseBuf; f.type = freq > 3000 ? 'highpass' : 'lowpass'; f.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    s.connect(f).connect(g).connect(dest); s.start(t); s.stop(t + dur);
+  }
+
+  // mỗi ô = 1 nốt móc kép, 16 ô/ô nhịp, hợp âm Am-F-C-G
+  const CHORDS = [[0, 3, 7], [-4, 0, 3], [3, 7, 10], [-2, 2, 5]];
+  const chill = { bpm: 96, step(s, t, c) {
+    if (s % 4 === 0) tone(mus, c[0] - 12, t, 0.5, 'triangle', 0.15);
+    if (s % 2 === 0) tone(mus, c[s / 2 % 3] + 12, t, 0.3, 'triangle', 0.05);
+  } };
+  const MUSIC = { lobby: chill, done: chill, race: { bpm: 150, step(s, t, c) {
+    if (s % 4 === 0) tone(mus, -12, t, 0.2, 'sine', 0.35, -36); // trống kick
+    if (s % 2) noise(mus, t, 0.04, 0.06, 7000); else tone(mus, c[0] - 12, t, 0.12, 'square', 0.06);
+    tone(mus, c[s % 3] + (s % 8 > 3 ? 24 : 12), t, 0.1, 'square', 0.025);
+  } } };
+  let music, step = 0, nextT = 0;
+  function setMusic(phase, delay = 0.05) { music = MUSIC[phase]; step = 0; nextT = ac.currentTime + delay; }
+  setMusic('lobby');
+  setInterval(() => {
+    mus.gain.setTargetAtTime(window.speechSynthesis?.speaking ? 0.3 : 0.7, ac.currentTime, 0.1); // nhỏ nhạc khi bình luận viên nói
+    if (!music || ac.state !== 'running') return;
+    nextT = Math.max(nextT, ac.currentTime); // tab bị treo thì bắt nhịp lại, không dồn nốt
+    for (; nextT < ac.currentTime + 0.12; nextT += 15 / music.bpm, step++) music.step(step % 16, nextT, CHORDS[(step >> 4) % 4]);
+  }, 25);
+
+  const honk = t => [0, 0.2].forEach(d => [10, 14].forEach(n => tone(out, n, t + d, 0.15, 'sawtooth', 0.08)));
+  let lastStun = 0;
+  const SFX = {
+    join: t => { tone(out, 12, t, 0.08, 'square', 0.08); tone(out, 19, t + 0.08, 0.15, 'square', 0.08); },
+    beep: t => tone(out, 15, t, 0.25, 'square', 0.12),
+    go: t => { tone(out, 27, t, 0.5, 'square', 0.12); honk(t + 0.1); },
+    stun: t => { if (t - lastStun < 0.15) return; lastStun = t; noise(out, t, 0.35, 0.4, 900); tone(out, -5, t, 0.3, 'sine', 0.4, -30); },
+    finish: (t, place) => (place <= 3 ? [15, 19, 22, 27] : [22]).forEach((n, i) => tone(out, n, t + i * 0.09, 0.35, 'triangle', 0.15)),
+    fanfare: t => [[3, .15], [7, .15], [10, .15], [15, .5], [10, .15], [15, .9]].reduce((at, [n, d]) =>
+      (tone(out, n, at, d + 0.1, 'square', 0.08), tone(out, n - 12, at, d + 0.1, 'triangle', 0.12), at + d), t),
+  };
+  function sounds(a, b) {
+    if (!('cd' in a)) return setMusic(b.phase); // state đầu tiên: chỉ chọn nhạc, không phát hiệu ứng
+    const t = ac.currentTime;
+    if (a.phase !== b.phase) {
+      setMusic(b.phase, b.phase === 'done' ? 2.2 : 0.05); // countdown không có nhạc; done chờ kèn xong mới vào nhạc
+      if (b.phase === 'race') SFX.go(t);
+      if (b.phase === 'done') SFX.fanfare(t);
+    }
+    if (b.phase === 'countdown' && b.cd > 0 && Math.ceil(b.cd / 1000) !== Math.ceil(a.cd / 1000)) SFX.beep(t);
+    const old = new Map(a.players.map(p => [p.id, p]));
+    for (const p of b.players) {
+      const o = old.get(p.id);
+      if (!o) { if (b.phase === 'lobby') SFX.join(t); }
+      else if (p.place && !o.place) SFX.finish(t, p.place);
+      else if (p.stun && !o.stun) SFX.stun(t);
+    }
+  }
+  let soundOn = true;
+  addEventListener('keydown', e => {
+    if (e.key.toLowerCase() !== 'n') return;
+    soundOn = !soundOn; out.gain.value = +soundOn;
+    commentate(soundOn ? 'Đã bật nhạc' : 'Đã tắt nhạc');
+  });
+
+  // Bình luận viên: hiện phụ đề + đọc bằng giọng có sẵn của trình duyệt (vi hoặc en). Phím M bật/tắt tiếng.
+  let muted = false, sayTimer;
+  // macOS có cả giọng 'vui' (Albert, Bad News…) đứng đầu danh sách tiếng Anh, nên ưu tiên giọng chuẩn
+  const voiceFor = lang => {
+    const vs = speechSynthesis.getVoices().filter(v => v.lang.replace('_', '-').toLowerCase().startsWith(lang));
+    return vs.find(v => /Samantha|Google US English|Daniel|Karen|Linh/.test(v.name)) || vs[0];
+  };
+  function commentate(text, urgent, lang = 'vi') {
+    $('say').textContent = text; $('say').classList.remove('old');
+    clearTimeout(sayTimer); sayTimer = setTimeout(() => $('say').classList.add('old'), 1500 + text.length * 70);
+    if (muted || !('speechSynthesis' in window)) return;
+    if (urgent) speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang === 'en' ? 'en-US' : 'vi-VN'; u.voice = voiceFor(lang) || null; u.rate = 1.15; u.pitch = 1.1;
+    speechSynthesis.speak(u);
+  }
+  addEventListener('keydown', e => {
+    if (e.key.toLowerCase() !== 'm') return;
+    muted = !muted; if (muted) speechSynthesis.cancel();
+    commentate(muted ? 'Đã tắt tiếng bình luận' : 'Đã bật tiếng bình luận');
+  });
   addEventListener('keydown', e => {
     if (e.code === 'Space' && key && ws.readyState === 1) ws.send(JSON.stringify({ start: key }));
   });
@@ -124,12 +238,13 @@
     ctx.restore();
   }
 
-  function sprite(name, x, y, width, height, fallback) {
+  function sprite(name, x, y, width, height, fallback, frame) {
     const image = sprites[name];
     if (!image.complete || !image.naturalWidth) return emoji(fallback, x, y, height, name === 'scooter');
-    const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
-    const w = image.naturalWidth * scale, h = image.naturalHeight * scale;
-    ctx.drawImage(image, x - w / 2, y - h / 2, w, h);
+    const source = frame || { x: 0, y: 0, w: image.naturalWidth, h: image.naturalHeight };
+    const scale = Math.min(width / source.w, height / source.h);
+    const w = source.w * scale, h = source.h * scale;
+    ctx.drawImage(image, source.x, source.y, source.w, source.h, x - w / 2, y - h / 2, w, h);
   }
 
   function draw() {
@@ -140,8 +255,8 @@
 
     const ps = state.players, n = Math.max(ps.length, 1);
     const lobby = state.phase === 'lobby';
-    const top = lobby ? 120 : 70, lane = Math.min(80, (H - top - (lobby ? 40 : 10)) / n);
-    const x0 = 200, x1 = Math.max(x0 + 200, W - (lobby ? 400 : 360)); // bên phải chừa cho QR + top 5
+    const top = lobby ? 120 : 130, lane = Math.min(80, (H - top - (lobby ? 40 : 10)) / n);
+    const x0 = 200, x1 = Math.max(x0 + 200, W - (lobby ? 400 : 50)); // lobby chừa chỗ cho QR to, lúc đua chỉ chừa vạch đích
     const X = pos => x0 + (x1 - x0) * pos / state.track;
 
     // mặt đường
@@ -169,13 +284,16 @@
         ctx.beginPath(); ctx.moveTo(x0 - 40, top + lane * i); ctx.lineTo(x1, top + lane * i); ctx.stroke();
         ctx.setLineDash([]);
       }
-      if (state.phase !== 'lobby') p.holes.forEach(h => sprite('pothole', X(h), y + lane * 0.27, lane * 0.6, lane * 0.3, '🕳️'));
-      sprite('scooter', X(x), y, lane * 1.1, lane * 0.7, '🛵');
+      // server tính sập ổ gà khi tâm xe chạm h → lệch ổ gà tới bánh trước, hạ xuống mặt đường (sprite xe cao 0.7 làn)
+      if (state.phase !== 'lobby') p.holes.forEach(h => sprite('pothole', X(h) + lane * 0.22, y + lane * 0.27, lane * 0.6, lane * 0.3, '🕳️'));
+      const frame = hurt.frame(p.id, p.stun);
+      const animated = frame && sprites['scooter-hurt'].complete && sprites['scooter-hurt'].naturalWidth;
+      sprite(animated ? 'scooter-hurt' : 'scooter', X(x), y, lane * 1.1, lane * 0.7, '🛵', animated ? frame : null);
       if (p.stun) sprite('impact', X(x), y - lane * 0.35, lane * 0.4, lane * 0.4, '💥');
       if (p.place) emoji(['🥇', '🥈', '🥉'][p.place - 1] || '🏁', X(x) + lane * 0.6, y, lane * 0.5);
 
       // số làn ở mép trái; làn hẹp thì tên chạy theo sau xe để khỏi phải dò cả hàng
-      ctx.font = `700 ${Math.max(14, Math.min(22, lane * 0.5))}px system-ui`;
+      ctx.font = `800 ${Math.max(14, Math.min(22, lane * 0.5))}px 'Baloo 2', system-ui`;
       ctx.textBaseline = 'middle'; ctx.lineWidth = 3; ctx.strokeStyle = '#000';
       ctx.fillStyle = `hsl(${p.hue} 80% 72%)`;
       ctx.textAlign = 'left'; ctx.fillText(i + 1, 12, y);
@@ -184,7 +302,7 @@
       ctx.strokeText(p.name, nx, y, nx - 50);
       ctx.fillText(p.name, nx, y, nx - 50);
     });
-    for (const id of shown.keys()) if (!ps.some(p => p.id === id)) shown.delete(id);
+    for (const id of shown.keys()) if (!ps.some(p => p.id === id)) { shown.delete(id); hurt.started.delete(id); }
 
     requestAnimationFrame(draw);
   }

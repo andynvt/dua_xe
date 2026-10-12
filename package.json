@@ -4,7 +4,7 @@
   "description": "Game đua xe ôm nhiều người chơi cho cả khán phòng",
   "scripts": {
     "test": "node test.js",
-    "start": "node server.js",
+    "start": "node --env-file-if-exists=.env server.js",
     "tunnel": "cloudflared tunnel --metrics 127.0.0.1:20241 --url http://localhost:3000"
   },
   "repository": {
