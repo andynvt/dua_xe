@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Đua Xe Ôm: màn hình</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #2b2a28; color: #fff; font-family: system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; }
+  header { position: fixed; top: 0; left: 0; right: 0; height: 110px; display: flex; align-items: center; gap: 24px; padding: 0 24px; }
+  header h1 { margin: 0; font-size: 2.4rem; white-space: nowrap; }
+  #status { font-size: 1.6rem; color: #ffd8a8; }
+  #qr { position: fixed; background: #fff; color: #111; border-radius: 14px; padding: 10px; text-align: center; font-weight: 700;
+    top: 10px; right: 16px; transition: all .4s; }
+  #qr img { display: block; width: 90px; height: 90px; transition: all .4s; }
+  #qr span { display: none; }
+  body.lobby #qr { top: 50%; right: 24px; transform: translateY(-50%); padding: 18px; }
+  body.lobby #qr img { width: 300px; height: 300px; }
+  body.lobby #qr span { display: block; margin-top: 8px; font-size: 1.3rem; }
+  #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    pointer-events: none; text-shadow: 0 4px 24px #000; }
+  #big { font-size: 12rem; font-weight: 900; }
+  #podium { font-size: 3rem; font-weight: 800; line-height: 1.5; background: #000a; padding: 24px 48px; border-radius: 20px; }
+  #podium:empty { display: none; }
+  #hint { position: fixed; bottom: 12px; left: 24px; color: #999; }
+</style>
+</head>
+<body class="lobby">
+<canvas id="c"></canvas>
+<header><h1>🛵 ĐUA XE ÔM</h1><div id="status">Đang kết nối…</div></header>
+<div id="qr"><img id="qrimg" alt="QR tham gia"><span>Quét để vào đua!</span></div>
+<div id="overlay"><div id="big"></div><div id="podium"></div></div>
+<div id="hint"></div>
+<script>
+  const $ = id => document.getElementById(id);
+  const key = new URLSearchParams(location.search).get('key');
+  const ctx = $('c').getContext('2d');
+  const ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
+  const shown = new Map(); // id -> vị trí đang vẽ, để xe chạy mượt giữa các lần nhận state
+  let state = { phase: 'lobby', players: [], track: 100 };
+
+  $('qrimg').src = '/qr.svg?u=' + encodeURIComponent(location.origin);
+  $('hint').textContent = key ? 'Space: bắt đầu / ván mới' : 'Chế độ xem: thêm ?key=… vào URL để điều khiển';
+  ws.onopen = () => ws.send(JSON.stringify({ screen: true }));
+  ws.onclose = () => { $('status').textContent = 'Mất kết nối server'; };
+  ws.onmessage = e => { state = JSON.parse(e.data); updateUI(); };
+  addEventListener('keydown', e => {
+    if (e.code === 'Space' && key && ws.readyState === 1) ws.send(JSON.stringify({ start: key }));
+  });
+
+  function updateUI() {
+    const n = state.players.length;
+    document.body.className = state.phase;
+    $('status').textContent = {
+      lobby: `Quét QR để tham gia · ${n} tay đua`,
+      countdown: 'Chuẩn bị…',
+      race: 'TAP! TAP! TAP!',
+      done: 'Kết thúc!',
+    }[state.phase];
+    $('big').textContent = state.phase === 'countdown' ? Math.ceil(state.cd / 1000) || 'ĐI!' : '';
+    $('podium').innerHTML = state.phase !== 'done' ? '' : state.players
+      .filter(p => p.place).sort((a, b) => a.place - b.place).slice(0, 3)
+      .map(p => `${['🥇', '🥈', '🥉'][p.place - 1]} ${esc(p.name)}`).join('<br>') || 'Không ai về đích 😅';
+  }
+  const esc = s => s.replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`);
+
+  function emoji(ch, x, y, size, flip) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (flip) ctx.scale(-1, 1); // emoji 🛵 của Apple quay đầu sang trái
+    ctx.font = `${size}px serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(ch, 0, 0);
+    ctx.restore();
+  }
+
+  function draw() {
+    const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
+    if ($('c').width !== W * dpr || $('c').height !== H * dpr) { $('c').width = W * dpr; $('c').height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    const ps = state.players, n = Math.max(ps.length, 1);
+    const top = 120, lane = Math.min(80, (H - top - 40) / n);
+    const x0 = 200, x1 = W - (state.phase === 'lobby' ? 400 : 80);
+    const X = pos => x0 + (x1 - x0) * pos / state.track;
+
+    // mặt đường
+    ctx.fillStyle = '#3d3b38';
+    ctx.fillRect(x0 - 40, top, x1 - x0 + 80, lane * n);
+    // vạch đích caro
+    const sq = 10;
+    for (let y = top, r = 0; y < top + lane * n; y += sq, r++)
+      for (let c = 0; c < 3; c++) { ctx.fillStyle = (r + c) % 2 ? '#fff' : '#111'; ctx.fillRect(x1 + c * sq, y, sq, sq); }
+
+    ps.forEach((p, i) => {
+      const y = top + lane * i + lane / 2;
+      const cur = shown.has(p.id) ? shown.get(p.id) : p.pos;
+      const x = cur + (p.pos - cur) * 0.3;
+      shown.set(p.id, x);
+
+      if (i > 0) {
+        ctx.strokeStyle = '#ffffff33'; ctx.setLineDash([16, 12]);
+        ctx.beginPath(); ctx.moveTo(x0 - 40, top + lane * i); ctx.lineTo(x1, top + lane * i); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      if (state.phase !== 'lobby') p.holes.forEach(h => emoji('🕳️', X(h), y, lane * 0.45));
+      emoji('🛵', X(x), y, lane * 0.7, true);
+      if (p.stun) emoji('💥', X(x), y - lane * 0.35, lane * 0.4);
+      if (p.place) emoji(['🥇', '🥈', '🥉'][p.place - 1] || '🏁', X(x) + lane * 0.6, y, lane * 0.5);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = `600 ${Math.max(10, Math.min(22, lane * 0.4))}px system-ui`;
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(p.name, x0 - 50, y, x0 - 60);
+    });
+    for (const id of shown.keys()) if (!ps.some(p => p.id === id)) shown.delete(id);
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+</script>
+</body>
+</html>

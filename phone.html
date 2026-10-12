@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Đua Xe Ôm</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #1d1a16; color: #fff; font-family: system-ui, sans-serif;
+    user-select: none; -webkit-user-select: none; touch-action: manipulation; overscroll-behavior: none; }
+  .screen { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 20px; text-align: center; }
+  [hidden] { display: none !important; }
+  h1 { font-size: 2.2rem; margin: 0; }
+  input, button { font: inherit; border: 0; border-radius: 14px; }
+  input { width: 100%; max-width: 320px; padding: 14px 16px; font-size: 1.2rem; text-align: center; }
+  form button { padding: 14px 32px; background: #e8590c; color: #fff; font-size: 1.2rem; font-weight: 700; }
+  form button:disabled { opacity: .4; }
+  #status { font-size: 1.4rem; font-weight: 700; min-height: 2em; }
+  #tap { width: min(80vw, 60vh); aspect-ratio: 1; border-radius: 50%; background: #e8590c; color: #fff;
+    font-size: 3rem; font-weight: 900; box-shadow: 0 10px 0 #a63e08; transition: transform .05s; }
+  #tap.hit { transform: translateY(6px) scale(.97); box-shadow: 0 4px 0 #a63e08; }
+  #tap.off { background: #555; box-shadow: 0 10px 0 #333; }
+  #tap.stun { background: #c92a2a; box-shadow: 0 10px 0 #7d1a1a; }
+  #bar { width: 100%; max-width: 360px; height: 14px; background: #333; border-radius: 7px; overflow: hidden; }
+  #fill { height: 100%; width: 0; background: #2b8a3e; transition: width .1s; }
+</style>
+</head>
+<body>
+<div id="join" class="screen">
+  <h1>🛵 Đua Xe Ôm</h1>
+  <form id="form">
+    <p><input id="name" maxlength="20" placeholder="Tên của bạn" autocomplete="off" required></p>
+    <button id="go" disabled>Đang kết nối…</button>
+  </form>
+</div>
+<div id="game" class="screen" hidden>
+  <div id="status">Chờ host bắt đầu…</div>
+  <button id="tap" class="off">🛵<br>TAP!</button>
+  <div id="bar"><div id="fill"></div></div>
+</div>
+<script>
+  const $ = id => document.getElementById(id);
+  const ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
+  let taps = 0, wasStun = false;
+
+  $('name').value = localStorage.name || '';
+  ws.onopen = () => { $('go').disabled = false; $('go').textContent = 'Vào đua'; };
+  ws.onclose = () => { $('status').textContent = 'Mất kết nối, tải lại trang nhé'; $('go').textContent = 'Mất kết nối'; $('go').disabled = true; };
+
+  $('form').onsubmit = e => {
+    e.preventDefault();
+    const name = $('name').value.trim();
+    if (!name || ws.readyState !== 1) return;
+    localStorage.name = name;
+    ws.send(JSON.stringify({ join: name }));
+    $('join').hidden = true; $('game').hidden = false;
+  };
+
+  $('tap').onpointerdown = e => {
+    e.preventDefault();
+    taps++;
+    $('tap').classList.add('hit');
+    setTimeout(() => $('tap').classList.remove('hit'), 60);
+  };
+  setInterval(() => { if (taps && ws.readyState === 1) { ws.send(JSON.stringify({ taps })); taps = 0; } }, 100);
+
+  ws.onmessage = e => {
+    const s = JSON.parse(e.data);
+    if (s.you || $('game').hidden) return;
+    let text;
+    if (s.phase === 'lobby') text = `Chờ host bắt đầu… (${s.total} tay đua)`;
+    else if (s.phase === 'countdown') text = `Chuẩn bị… ${Math.ceil(s.cd / 1000)}`;
+    else if (s.place) text = `🏁 Về đích hạng ${s.place}! ${['🥇', '🥈', '🥉'][s.place - 1] || '🎉'}`;
+    else if (s.phase === 'race') text = s.stun ? '💥 Sập ổ gà!' : `Hạng ${s.rank}/${s.total}. TAP liên tục!`;
+    else text = `Hết giờ! Bạn hạng ${s.rank}/${s.total}`;
+    $('status').textContent = text;
+    $('fill').style.width = (100 * s.pos / s.track) + '%';
+    const racing = s.phase === 'race' && !s.place;
+    $('tap').classList.toggle('off', !racing);
+    $('tap').classList.toggle('stun', racing && s.stun);
+    if (s.stun && !wasStun && navigator.vibrate) navigator.vibrate(200);
+    wasStun = s.stun;
+  };
+</script>
+</body>
+</html>

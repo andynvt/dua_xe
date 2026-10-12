@@ -1,0 +1,92 @@
+const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
+const { WebSocketServer } = require('ws');
+const QRCode = require('qrcode');
+
+const PORT = process.env.PORT || 3000;
+const HOST_KEY = process.env.HOST_KEY || crypto.randomBytes(3).toString('hex');
+const TRACK = 100, COUNTDOWN_MS = 3000, RACE_MAX_MS = 60000, STUN_MS = 800, MAX_PLAYERS = 100;
+const TAPS_PER_MS = 0.015, TAP_BURST = 5; // tối đa ~15 tap/giây, người thật tap ~8-12
+
+const pages = { '/': 'phone.html', '/screen': 'screen.html' };
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://x');
+  if (url.pathname === '/qr.svg') {
+    const u = url.searchParams.get('u') || '';
+    if (!/^https?:\/\/[^\s]{1,200}$/.test(u)) { res.writeHead(400); return res.end(); }
+    res.writeHead(200, { 'content-type': 'image/svg+xml' });
+    return res.end(await QRCode.toString(u, { type: 'svg', margin: 1 }));
+  }
+  const page = pages[url.pathname];
+  if (!page) { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+  fs.createReadStream(path.join(__dirname, page)).pipe(res);
+});
+
+const wss = new WebSocketServer({ server, maxPayload: 1024 });
+const players = new Map(); // ws -> player
+const screens = new Set();
+let nextId = 1;
+let game = { phase: 'lobby', startAt: 0, finished: 0 };
+
+const randomHoles = () => [20, 45, 70].map(h => h + Math.floor(Math.random() * 15));
+
+function newRace() {
+  if (game.phase === 'countdown' || game.phase === 'race') return;
+  for (const p of players.values()) Object.assign(p, { pos: 0, place: 0, stunUntil: 0, holes: randomHoles() });
+  game = { phase: 'countdown', startAt: Date.now() + COUNTDOWN_MS, finished: 0 };
+}
+
+function addTaps(p, n) {
+  const now = Date.now();
+  p.budget = Math.min(TAP_BURST, p.budget + (now - p.lastTap) * TAPS_PER_MS);
+  p.lastTap = now;
+  if (game.phase !== 'race' || p.place || now < p.stunUntil) return;
+  const k = Math.min(Math.max(n | 0, 0), Math.floor(p.budget));
+  p.budget -= k;
+  const before = p.pos;
+  p.pos = Math.min(TRACK, p.pos + k);
+  if (p.holes.some(h => before < h && p.pos >= h)) p.stunUntil = now + STUN_MS;
+  if (p.pos >= TRACK) p.place = ++game.finished;
+}
+
+wss.on('connection', ws => {
+  ws.on('message', raw => {
+    let d; try { d = JSON.parse(raw); } catch { return; }
+    if (!d || typeof d !== 'object') return;
+    if (d.join && !players.has(ws) && players.size < MAX_PLAYERS) {
+      const p = { id: nextId++, name: String(d.join).trim().slice(0, 20) || 'Ẩn danh',
+        pos: 0, place: 0, stunUntil: 0, holes: randomHoles(), budget: TAP_BURST, lastTap: Date.now() };
+      players.set(ws, p);
+      ws.send(JSON.stringify({ you: p.id }));
+    }
+    if (d.taps && players.has(ws)) addTaps(players.get(ws), d.taps);
+    if (d.screen) screens.add(ws);
+    if (d.start === HOST_KEY) newRace();
+  });
+  ws.on('close', () => { players.delete(ws); screens.delete(ws); });
+});
+
+setInterval(() => {
+  const now = Date.now();
+  const ps = [...players.values()];
+  if (game.phase === 'countdown' && now >= game.startAt) game.phase = 'race';
+  if (game.phase === 'race' && (game.finished >= 3 || (ps.length && ps.every(p => p.place)) || now - game.startAt > RACE_MAX_MS))
+    game.phase = 'done';
+
+  const cd = Math.max(0, game.startAt - now);
+  const ranked = [...ps].sort((a, b) => (a.place || 1e9) - (b.place || 1e9) || b.pos - a.pos);
+  const rank = new Map(ranked.map((p, i) => [p, i + 1]));
+
+  // màn hình nhận toàn bộ state, điện thoại chỉ nhận phần của mình để tunnel không bị nghẽn
+  const full = JSON.stringify({ phase: game.phase, cd, track: TRACK,
+    players: ps.map(p => ({ id: p.id, name: p.name, pos: p.pos, place: p.place, stun: now < p.stunUntil, holes: p.holes })) });
+  for (const s of screens) s.send(full);
+  for (const [ws, p] of players)
+    ws.send(JSON.stringify({ phase: game.phase, cd, track: TRACK, pos: p.pos, place: p.place,
+      stun: now < p.stunUntil, rank: rank.get(p), total: ps.length }));
+}, 50);
+
+server.listen(PORT, () => {
+  console.log(`Đua Xe Ôm chạy tại http://localhost:${PORT}`);
+  console.log(`Màn hình host: http://localhost:${PORT}/screen?key=${HOST_KEY}  (Space = bắt đầu)`);
+});
