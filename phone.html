@@ -116,7 +116,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     if (st) {
-      const lane = Math.min(H * 0.6, 120), y = H / 2, x0 = 36, x1 = W - 30;
+      const lane = Math.min(H * 0.6, 120), y = H / 2, x0 = Math.max(36, lane * 0.45 + 8), x1 = W - x0;
       const X = pos => x0 + (x1 - x0) * pos / st.track;
       ctx.fillStyle = '#3d3b38'; ctx.fillRect(0, y - lane / 2, W, lane);
       ctx.strokeStyle = '#fff6'; ctx.lineWidth = 2; ctx.setLineDash([14, 10]);

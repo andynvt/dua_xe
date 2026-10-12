@@ -9,7 +9,7 @@ Tạo ngày 12/10/2026 bằng GPT ImageGen có sẵn trong Codex, theo bộ asse
 | pothole.png | 128 × 64 | Ổ gà trên đường đua |
 | impact.png | 128 × 128 | Hiệu ứng trúng ổ gà |
 
-Đây là ảnh tĩnh. Khi nạp sprite lỗi hoặc chưa hoàn tất, Canvas dùng emoji dự phòng.
+Đây là ảnh tĩnh. Khi nạp sprite lỗi hoặc chưa hoàn tất, Canvas màn hình lớn dùng emoji dự phòng.
 Chỉ ba PNG được phục vụ qua `/assets/`; tài liệu này không được public bởi server.
 
 ## Prompt xe ôm

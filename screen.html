@@ -18,6 +18,13 @@
   body.lobby #qr { top: 50%; right: 24px; transform: translateY(-50%); padding: 18px; }
   body.lobby #qrimg { width: 300px; height: 300px; }
   body.lobby #qr span { display: block; margin-top: 8px; font-size: 1.3rem; }
+  #qr { cursor: zoom-in; z-index: 10; }
+  /* bấm QR: phóng to toàn màn hình, bấm lại hoặc Esc để thu nhỏ */
+  body #qr.full { inset: 0; top: 0; right: 0; transform: none; border-radius: 0; cursor: zoom-out;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  body #qr.full #qrimg { width: min(85vw, 80vh); height: min(85vw, 80vh); }
+  body #qr.full span { display: block; margin-top: 8px; font-size: 2rem; }
+  body #qr.full #joinurl { font-size: 1.2rem !important; max-width: 85vw; }
   #joinurl { font-size: .85rem !important; font-weight: 400; color: #555; max-width: 300px; word-break: break-all; }
   #joinurl.warn { color: #c92a2a; font-weight: 700; }
   #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -71,6 +78,8 @@
     } catch {}
   }
   refreshQR(); setInterval(refreshQR, 5000);
+  $('qr').onclick = () => $('qr').classList.toggle('full');
+  addEventListener('keydown', e => e.key === 'Escape' && $('qr').classList.remove('full'));
   $('hint').textContent = key ? 'Space: bắt đầu / ván mới' : 'Chế độ xem: thêm ?key=… vào URL để điều khiển';
   ws.onopen = () => ws.send(JSON.stringify({ screen: true }));
   ws.onclose = () => { $('status').textContent = 'Mất kết nối server'; };
@@ -160,7 +169,7 @@
         ctx.beginPath(); ctx.moveTo(x0 - 40, top + lane * i); ctx.lineTo(x1, top + lane * i); ctx.stroke();
         ctx.setLineDash([]);
       }
-      if (state.phase !== 'lobby') p.holes.forEach(h => sprite('pothole', X(h), y, lane * 0.6, lane * 0.3, '🕳️'));
+      if (state.phase !== 'lobby') p.holes.forEach(h => sprite('pothole', X(h), y + lane * 0.27, lane * 0.6, lane * 0.3, '🕳️'));
       sprite('scooter', X(x), y, lane * 1.1, lane * 0.7, '🛵');
       if (p.stun) sprite('impact', X(x), y - lane * 0.35, lane * 0.4, lane * 0.4, '💥');
       if (p.place) emoji(['🥇', '🥈', '🥉'][p.place - 1] || '🏁', X(x) + lane * 0.6, y, lane * 0.5);
