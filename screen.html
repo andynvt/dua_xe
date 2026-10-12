@@ -147,12 +147,15 @@
   let lastStun = 0;
   const SFX = {
     join: t => { tone(out, 12, t, 0.08, 'square', 0.08); tone(out, 19, t + 0.08, 0.15, 'square', 0.08); },
-    beep: t => tone(out, 15, t, 0.25, 'square', 0.12),
-    go: t => { tone(out, 27, t, 0.5, 'square', 0.12); honk(t + 0.1); },
+    // kiểu đèn xuất phát F1: tiếng bíp + tiếng nẹt pô gầm dần lên mỗi nhịp (k = 1, 2, 3)
+    beep: (t, k) => { tone(out, 0, t, 0.4, 'square', 0.1); tone(out, -24 + k * 3, t, 0.7, 'sawtooth', 0.12, -14 + k * 4); noise(out, t, 0.5, 0.2, 300); },
+    go: t => { tone(out, 12, t, 0.9, 'square', 0.12); tone(out, -20, t, 1.4, 'sawtooth', 0.18, 2); noise(out, t, 1, 0.3, 500); honk(t + 0.3); },
     stun: t => { if (t - lastStun < 0.15) return; lastStun = t; noise(out, t, 0.35, 0.4, 900); tone(out, -5, t, 0.3, 'sine', 0.4, -30); },
     finish: (t, place) => (place <= 3 ? [15, 19, 22, 27] : [22]).forEach((n, i) => tone(out, n, t + i * 0.09, 0.35, 'triangle', 0.15)),
     fanfare: t => [[3, .15], [7, .15], [10, .15], [15, .5], [10, .15], [15, .9]].reduce((at, [n, d]) =>
       (tone(out, n, at, d + 0.1, 'square', 0.08), tone(out, n - 12, at, d + 0.1, 'triangle', 0.12), at + d), t),
+    // khán giả vỗ tay: ~150 tiếng "bộp" ngẫu nhiên trong 4 giây, nhỏ dần
+    applause: t => { for (let i = 0; i < 150; i++) { const d = Math.random() * 4; noise(out, t + d, 0.04, 0.12 * (1 - d / 5), 1500 + Math.random() * 2500); } },
   };
   function sounds(a, b) {
     if (!('cd' in a)) return setMusic(b.phase); // state đầu tiên: chỉ chọn nhạc, không phát hiệu ứng
@@ -160,9 +163,9 @@
     if (a.phase !== b.phase) {
       setMusic(b.phase, b.phase === 'done' ? 2.2 : 0.05); // countdown không có nhạc; done chờ kèn xong mới vào nhạc
       if (b.phase === 'race') SFX.go(t);
-      if (b.phase === 'done') SFX.fanfare(t);
+      if (b.phase === 'done') { SFX.fanfare(t); SFX.applause(t + 0.6); }
     }
-    if (b.phase === 'countdown' && b.cd > 0 && Math.ceil(b.cd / 1000) !== Math.ceil(a.cd / 1000)) SFX.beep(t);
+    if (b.phase === 'countdown' && b.cd > 0 && Math.ceil(b.cd / 1000) !== Math.ceil(a.cd / 1000)) SFX.beep(t, 4 - Math.ceil(b.cd / 1000));
     const old = new Map(a.players.map(p => [p.id, p]));
     for (const p of b.players) {
       const o = old.get(p.id);

@@ -114,6 +114,14 @@
     n.connect(f).connect(g1).connect(ac.destination); o.connect(g2).connect(ac.destination);
     n.start(t); n.stop(t + 0.4); o.start(t); o.stop(t + 0.3);
   }
+  // bíp đếm ngược kiểu F1: 3-2-1 nốt La, GO cao hơn 1 quãng tám
+  function beep(f, dur, at = 0, type = 'square') {
+    if (!ac) return;
+    const t = ac.currentTime + at, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(0.15, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
+  }
   $('tap').onpointerdown = e => {
     e.preventDefault();
     if (ac?.state === 'suspended') ac.resume(); // iOS tạm dừng audio khi khoá màn hình/chuyển app
@@ -149,6 +157,9 @@
     if (s.phase === 'countdown') big(s.cd > 0 ? String(Math.ceil(s.cd / 1000)) : 'GO!', s.cd > 0 ? '' : 'go');
     else if (s.phase === 'race' && st?.phase === 'countdown') { big('GO!', 'go'); clearTimeout(goTimer); goTimer = setTimeout(() => big(''), 900); }
     else if (s.phase !== 'race') big('');
+    const sec = x => x?.phase === 'countdown' ? Math.ceil(x.cd / 1000) : 0;
+    if (sec(s) && sec(s) !== sec(st)) beep(440, 0.4);
+    if (s.phase === 'race' && st?.phase === 'countdown') beep(880, 0.9);
     st = s;
     if (s.stun && !wasStun) { crash(); if (navigator.vibrate) navigator.vibrate(200); }
     wasStun = s.stun;
@@ -180,6 +191,9 @@
     }
     w.hidden = false;
     if (navigator.vibrate) navigator.vibrate(top ? [100, 60, 100, 60, 300] : 150);
+    // nhạc chúc mừng: top 3 rải hợp âm Đô trưởng lên cao, về đích thường 2 nốt, hết giờ 2 nốt đi xuống
+    const notes = top ? [523, 659, 784, 1047, 784, 1047] : s.place ? [659, 1047] : [392, 330];
+    notes.forEach((f, i) => beep(f, i === notes.length - 1 ? 0.8 : 0.25, i * 0.13, 'triangle'));
   };
 
   function sprite(name, x, y, w, h, frame) {
