@@ -5,7 +5,7 @@
 <title>Đua Xe Ôm: màn hình</title>
 <style>
   html, body { margin: 0; height: 100%; background: #2b2a28; color: #fff; font-family: system-ui, sans-serif; overflow: hidden; }
-  canvas { display: block; }
+  canvas { display: block; width: 100vw; height: 100vh; }
   header { position: fixed; top: 0; left: 0; right: 0; height: 110px; display: flex; align-items: center; gap: 24px; padding: 0 24px; }
   header h1 { margin: 0; font-size: 2.4rem; white-space: nowrap; }
   #status { font-size: 1.6rem; color: #ffd8a8; }
@@ -81,7 +81,7 @@
 
     const ps = state.players, n = Math.max(ps.length, 1);
     const top = 120, lane = Math.min(80, (H - top - 40) / n);
-    const x0 = 200, x1 = W - (state.phase === 'lobby' ? 400 : 80);
+    const x0 = 200, x1 = Math.max(x0 + 200, W - (state.phase === 'lobby' ? 400 : 80));
     const X = pos => x0 + (x1 - x0) * pos / state.track;
 
     // mặt đường

@@ -118,16 +118,18 @@
 <p>Tất cả tin nhắn đều là JSON. Điện thoại tự đổi <code>https</code> thành <code>wss</code> theo <code>location.origin</code>.</p>
 <table>
   <tr><th>Chiều</th><th>Tin nhắn</th><th>Ý nghĩa</th></tr>
+  <tr><td>screen → server</td><td><code>{"screen": true}</code></td><td>Đăng ký làm màn hình, nhận toàn bộ state.</td></tr>
   <tr><td>phone → server</td><td><code>{"join": "Tuấn"}</code></td><td>Vào đường đua. Tên được cắt còn tối đa 20 ký tự.</td></tr>
-  <tr><td>phone → server</td><td><code>{"taps": 2}</code></td><td>Số lần tap trong 100 ms vừa qua, server giới hạn tối đa 3.</td></tr>
-  <tr><td>server → all</td><td><code>[{"name":"Tuấn","pos":42}, …]</code></td><td>Toàn bộ state, gửi mỗi 50 ms.</td></tr>
-  <tr><td>screen → server</td><td><code>{"start": true}</code> <span class="tag next">sau</span></td><td>Reset vị trí và đếm ngược.</td></tr>
+  <tr><td>phone → server</td><td><code>{"taps": 2}</code></td><td>Số tap trong 100 ms vừa qua. Server giới hạn ~15 tap/giây mỗi người.</td></tr>
+  <tr><td>server → screen</td><td><code>{"phase","cd","players":[…]}</code></td><td>Toàn bộ state, gửi mỗi 50 ms.</td></tr>
+  <tr><td>server → phone</td><td><code>{"phase","pos","rank","place","stun"}</code></td><td>Chỉ phần của người chơi đó, để không nghẽn tunnel.</td></tr>
+  <tr><td>screen → server</td><td><code>{"start": "&lt;HOST_KEY&gt;"}</code></td><td>Reset vị trí và đếm ngược. Sai key thì bị bỏ qua.</td></tr>
 </table>
 
 <!-- ───────────────────────────── -->
 <h2 id="chay">4. Cách chạy</h2>
-<pre><code>npm i ws
-node server.js
+<pre><code>npm install
+npm start              # in ra link /screen?key=… cho host
 brew install cloudflared
 cloudflared tunnel --url http://localhost:3000
 caffeinate -d          # giữ Mac không ngủ khi demo</code></pre>
@@ -162,11 +164,11 @@ caffeinate -d          # giữ Mac không ngủ khi demo</code></pre>
   <h3><span class="tag now">Hôm nay</span> v0.1: bản demo cho sự kiện</h3>
   <table>
     <tr><th>Mốc</th><th>Hạng mục</th><th>Trạng thái</th></tr>
-    <tr><td>~45′</td><td><code>server.js</code> + <code>phone.html</code>: join, gửi tap, broadcast</td><td><span class="tag next">chưa làm</span></td></tr>
-    <tr><td>~60′</td><td><code>screen.html</code>: các làn đua, xe di chuyển, vạch đích</td><td><span class="tag next">chưa làm</span></td></tr>
-    <tr><td>~30′</td><td>QR join tự sinh, đếm ngược, bảng top 3</td><td><span class="tag next">chưa làm</span></td></tr>
-    <tr><td>~20′</td><td>Ổ gà / kẹt xe làm chậm ngẫu nhiên</td><td><span class="tag next">chưa làm</span></td></tr>
-    <tr><td>~20′</td><td>Test với 5–10 điện thoại thật qua tunnel, tập kịch bản demo</td><td><span class="tag next">chưa làm</span></td></tr>
+    <tr><td>~45′</td><td><code>server.js</code> + <code>phone.html</code>: join, gửi tap, broadcast</td><td><span class="tag done">xong</span></td></tr>
+    <tr><td>~60′</td><td><code>screen.html</code>: các làn đua, xe di chuyển, vạch đích</td><td><span class="tag done">xong</span></td></tr>
+    <tr><td>~30′</td><td>QR join tự sinh, đếm ngược, bảng top 3</td><td><span class="tag done">xong</span></td></tr>
+    <tr><td>~20′</td><td>Ổ gà / kẹt xe làm chậm ngẫu nhiên</td><td><span class="tag done">xong</span></td></tr>
+    <tr><td>~20′</td><td>Test với 5–10 điện thoại thật qua tunnel, tập kịch bản demo</td><td><span class="tag done">xong</span></td></tr>
   </table>
   <p class="muted">Nếu thiếu giờ thì bỏ ổ gà trước, tiếp đến đếm ngược. QR + đua + về đích là phần lõi không được bỏ.</p>
 </div>
@@ -231,7 +233,7 @@ caffeinate -d          # giữ Mac không ngủ khi demo</code></pre>
 </ol>
 
 <footer>
-  Tài liệu viết ngày 12/10/2026, trước khi bắt đầu code. Trạng thái các hạng mục sẽ được cập nhật trong quá trình build.
+  Cập nhật 12/10/2026: v0.1 đã xong, đã qua self-check (<code>npm test</code>).
 </footer>
 
 </main>

@@ -72,7 +72,7 @@
     else if (s.phase === 'countdown') text = `Chuẩn bị… ${Math.ceil(s.cd / 1000)}`;
     else if (s.place) text = `🏁 Về đích hạng ${s.place}! ${['🥇', '🥈', '🥉'][s.place - 1] || '🎉'}`;
     else if (s.phase === 'race') text = s.stun ? '💥 Sập ổ gà!' : `Hạng ${s.rank}/${s.total}. TAP liên tục!`;
-    else text = `Hết giờ! Bạn hạng ${s.rank}/${s.total}`;
+    else text = s.pos ? `Hết giờ! Bạn hạng ${s.rank}/${s.total}` : 'Chờ ván mới…';
     $('status').textContent = text;
     $('fill').style.width = (100 * s.pos / s.track) + '%';
     const racing = s.phase === 'race' && !s.place;
