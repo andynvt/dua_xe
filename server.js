@@ -4,7 +4,7 @@ const QRCode = require('qrcode');
 
 const PORT = process.env.PORT || 3000;
 const HOST_KEY = process.env.HOST_KEY || crypto.randomBytes(3).toString('hex');
-const TRACK = 100, COUNTDOWN_MS = 3000, RACE_MAX_MS = 60000, STUN_MS = 800, MAX_PLAYERS = 100;
+const TRACK = 100, COUNTDOWN_MS = 3000, RACE_MAX_MS = 60000, STUN_MS = 800, MAX_PLAYERS = 30;
 const TAPS_PER_MS = 0.015, TAP_BURST = 5; // tối đa ~15 tap/giây, người thật tap ~8-12
 
 // Link cho người chơi: PUBLIC_URL > link tunnel hỏi từ cloudflared (`npm run tunnel`) > chính địa chỉ đang mở
@@ -84,7 +84,7 @@ wss.on('connection', ws => {
         pos: 0, place: 0, stunUntil: 0, holes: randomHoles(), budget: TAP_BURST, lastTap: Date.now() };
       players.set(ws, p);
       ws.send(JSON.stringify({ you: p.id, hue: p.hue }));
-    }
+    } else if (d.join && !players.has(ws)) ws.send(JSON.stringify({ full: MAX_PLAYERS }));
     if (d.taps && players.has(ws)) addTaps(players.get(ws), d.taps);
     if (d.screen) screens.add(ws);
     if (d.start === HOST_KEY) newRace();

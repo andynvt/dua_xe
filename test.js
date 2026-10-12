@@ -52,6 +52,14 @@ function client(onMsg) {
   clearInterval(t);
   assert.equal(screen.phase, 'done');
   assert.deepEqual(screen.players.filter(p => p.place).map(p => p.place).sort(), [1, 2]);
-  console.log('✅ OK: lobby, start key, chống gian lận, ổ gà, về đích đều chạy đúng');
+
+  // còn 2 bot, thêm 28 người cho đủ 30 thì người thứ 31 phải được báo phòng đầy
+  for (let i = 0; i < 28; i++) (await client(() => {})).send(JSON.stringify({ join: 'Fill' + i }));
+  let late = {};
+  (await client(m => (late = m))).send(JSON.stringify({ join: 'Trễ' }));
+  await sleep(200);
+  assert.equal(screen.players.length, 30);
+  assert.equal(late.full, 30);
+  console.log('✅ OK: lobby, start key, chống gian lận, ổ gà, về đích, giới hạn 30 người đều chạy đúng');
   srv.kill(); process.exit(0);
 })().catch(e => { console.error('❌', e.message); srv.kill(); process.exit(1); });

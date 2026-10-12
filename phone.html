@@ -85,6 +85,7 @@
       $('me').style.color = `hsl(${s.hue} 80% 72%)`;
       return;
     }
+    if (s.full) { $('status').textContent = `Phòng đã đủ ${s.full} tay đua, chờ ván sau nhé`; $('go').disabled = true; return; }
     if ($('game').hidden) return;
     $('me').textContent = `Làn ${s.lane}`;
     let text;
