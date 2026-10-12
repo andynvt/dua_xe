@@ -11,11 +11,14 @@
   #status { font-size: 1.6rem; color: #ffd8a8; }
   #qr { position: fixed; background: #fff; color: #111; border-radius: 14px; padding: 10px; text-align: center; font-weight: 700;
     top: 10px; right: 16px; transition: all .4s; }
-  #qr img { display: block; width: 90px; height: 90px; transition: all .4s; }
+  #qrimg { width: 90px; height: 90px; transition: all .4s; }
+  #qrimg svg { display: block; width: 100%; height: 100%; }
   #qr span { display: none; }
   body.lobby #qr { top: 50%; right: 24px; transform: translateY(-50%); padding: 18px; }
-  body.lobby #qr img { width: 300px; height: 300px; }
+  body.lobby #qrimg { width: 300px; height: 300px; }
   body.lobby #qr span { display: block; margin-top: 8px; font-size: 1.3rem; }
+  #joinurl { font-size: .85rem !important; font-weight: 400; color: #555; max-width: 300px; word-break: break-all; }
+  #joinurl.warn { color: #c92a2a; font-weight: 700; }
   #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
     pointer-events: none; text-shadow: 0 4px 24px #000; }
   #big { font-size: 12rem; font-weight: 900; }
@@ -27,7 +30,7 @@
 <body class="lobby">
 <canvas id="c"></canvas>
 <header><h1>🛵 ĐUA XE ÔM</h1><div id="status">Đang kết nối…</div></header>
-<div id="qr"><img id="qrimg" alt="QR tham gia"><span>Quét để vào đua!</span></div>
+<div id="qr"><div id="qrimg" role="img" aria-label="QR tham gia"></div><span>Quét để vào đua!</span><span id="joinurl"></span></div>
 <div id="overlay"><div id="big"></div><div id="podium"></div></div>
 <div id="hint"></div>
 <script>
@@ -38,7 +41,19 @@
   const shown = new Map(); // id -> vị trí đang vẽ, để xe chạy mượt giữa các lần nhận state
   let state = { phase: 'lobby', players: [], track: 100 };
 
-  $('qrimg').src = '/qr.svg?u=' + encodeURIComponent(location.origin);
+  // hỏi lại mỗi 5s: bật tunnel sau khi đã mở màn hình thì QR vẫn tự đổi sang link public
+  async function refreshQR() {
+    try {
+      const { url, svg } = await (await fetch('/join')).json();
+      if ($('qrimg').dataset.url === url) return;
+      $('qrimg').dataset.url = url;
+      $('qrimg').innerHTML = svg;
+      const local = /\/\/(localhost|127\.|\[::1\])/.test(url);
+      $('joinurl').textContent = local ? '⚠️ Chưa có tunnel, điện thoại không vào được. Chạy: npm run tunnel' : url.replace('https://', '');
+      $('joinurl').classList.toggle('warn', local);
+    } catch {}
+  }
+  refreshQR(); setInterval(refreshQR, 5000);
   $('hint').textContent = key ? 'Space: bắt đầu / ván mới' : 'Chế độ xem: thêm ?key=… vào URL để điều khiển';
   ws.onopen = () => ws.send(JSON.stringify({ screen: true }));
   ws.onclose = () => { $('status').textContent = 'Mất kết nối server'; };

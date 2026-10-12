@@ -131,9 +131,9 @@
 <pre><code>npm install
 npm start              # in ra link /screen?key=… cho host
 brew install cloudflared
-cloudflared tunnel --url http://localhost:3000
+npm run tunnel         # QR trên màn hình tự lấy link public từ cloudflared
 caffeinate -d          # giữ Mac không ngủ khi demo</code></pre>
-<p>Laptop mở <code>https://&lt;link&gt;.trycloudflare.com/screen</code> rồi chiếu lên. QR trên màn hình trỏ về link gốc, người chơi quét là vào.</p>
+<p>Laptop mở <code>http://localhost:3000/screen?key=…</code> rồi chiếu lên. QR tự trỏ về link tunnel. Nếu QR hiện cảnh báo đỏ "Chưa có tunnel" thì chạy <code>npm run tunnel</code>.</p>
 
 <!-- ───────────────────────────── -->
 <h2 id="demo">5. Kịch bản demo (90 giây)</h2>
@@ -150,7 +150,7 @@ caffeinate -d          # giữ Mac không ngủ khi demo</code></pre>
 <table>
   <tr><th>Rủi ro</th><th>Phương án</th></tr>
   <tr><td>Wi‑Fi sự kiện chập chờn</td><td>Bật hotspot điện thoại cho MacBook. Tunnel vẫn chạy bình thường.</td></tr>
-  <tr><td>Tunnel đổi link sau khi restart</td><td>QR đọc link từ <code>location.origin</code> nên tự đúng. Không in QR ra giấy.</td></tr>
+  <tr><td>Tunnel đổi link sau khi restart</td><td>Server hỏi cloudflared link hiện tại, màn hình cập nhật QR mỗi 5 giây. Không in QR ra giấy.</td></tr>
   <tr><td>Wi‑Fi cách ly thiết bị (client isolation)</td><td>Không ảnh hưởng vì mọi kết nối đều đi qua Cloudflare.</td></tr>
   <tr><td>Có người gửi tap giả</td><td>Server giới hạn <code>taps ≤ 3</code> mỗi tin nhắn, bỏ qua JSON lỗi.</td></tr>
   <tr><td>Mac ngủ / firewall chặn</td><td>Chạy <code>caffeinate -d</code>, bấm Allow khi macOS hỏi.</td></tr>

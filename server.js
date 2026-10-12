@@ -7,14 +7,24 @@ const HOST_KEY = process.env.HOST_KEY || crypto.randomBytes(3).toString('hex');
 const TRACK = 100, COUNTDOWN_MS = 3000, RACE_MAX_MS = 60000, STUN_MS = 800, MAX_PLAYERS = 100;
 const TAPS_PER_MS = 0.015, TAP_BURST = 5; // tối đa ~15 tap/giây, người thật tap ~8-12
 
+// Link cho người chơi: PUBLIC_URL > link tunnel hỏi từ cloudflared (`npm run tunnel`) > chính địa chỉ đang mở
+async function joinUrl(req) {
+  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL;
+  try {
+    const r = await fetch('http://127.0.0.1:20241/quicktunnel', { signal: AbortSignal.timeout(500) });
+    const { hostname } = await r.json();
+    if (hostname) return 'https://' + hostname;
+  } catch {}
+  return 'http://' + req.headers.host;
+}
+
 const pages = { '/': 'phone.html', '/screen': 'screen.html' };
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname === '/qr.svg') {
-    const u = url.searchParams.get('u') || '';
-    if (!/^https?:\/\/[^\s]{1,200}$/.test(u)) { res.writeHead(400); return res.end(); }
-    res.writeHead(200, { 'content-type': 'image/svg+xml' });
-    return res.end(await QRCode.toString(u, { type: 'svg', margin: 1 }));
+  if (url.pathname === '/join') {
+    const u = await joinUrl(req);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify({ url: u, svg: await QRCode.toString(u, { type: 'svg', margin: 1 }) }));
   }
   const page = pages[url.pathname];
   if (!page) { res.writeHead(404); return res.end(); }
