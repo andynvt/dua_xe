@@ -8,6 +8,7 @@
   canvas { display: block; width: 100vw; height: 100vh; }
   header { position: fixed; top: 0; left: 0; right: 0; height: 110px; display: flex; align-items: center; gap: 24px; padding: 0 24px; }
   header h1 { margin: 0; font-size: 2.4rem; white-space: nowrap; }
+  .logo { width: 1.5em; height: 1.15em; object-fit: contain; vertical-align: middle; }
   #status { font-size: 1.6rem; color: #ffd8a8; }
   #qr { position: fixed; background: #fff; color: #111; border-radius: 14px; padding: 10px; text-align: center; font-weight: 700;
     top: 10px; right: 16px; transition: all .4s; }
@@ -25,18 +26,34 @@
   #podium { font-size: 3rem; font-weight: 800; line-height: 1.5; background: #000a; padding: 24px 48px; border-radius: 20px; }
   #podium:empty { display: none; }
   #hint { position: fixed; bottom: 12px; left: 24px; color: #999; }
+  /* lúc đua: header gọn lại, nhường chỗ cho làn đường */
+  body:not(.lobby) header { height: 60px; }
+  body:not(.lobby) header h1 { font-size: 1.6rem; }
+  body.race #hint, body.countdown #hint { display: none; }
+  #top { display: none; position: fixed; top: 140px; right: 16px; width: 300px; box-sizing: border-box; margin: 0; padding: 12px 16px; list-style-position: inside;
+    background: #000a; border-radius: 14px; font-size: 1.5rem; font-weight: 700; line-height: 1.6; }
+  body.race #top, body.done #top { display: block; }
+  #top li { color: hsl(var(--h) 80% 72%); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #top li::marker { color: #fff; }
+  #top small { color: #fff8; font-size: 1rem; font-weight: 600; margin-left: 6px; }
 </style>
 </head>
 <body class="lobby">
 <canvas id="c"></canvas>
-<header><h1>🛵 ĐUA XE ÔM</h1><div id="status">Đang kết nối…</div></header>
+<header><h1><img class="logo" src="/assets/scooter.png" alt=""> ĐUA XE ÔM</h1><div id="status">Đang kết nối…</div></header>
 <div id="qr"><div id="qrimg" role="img" aria-label="QR tham gia"></div><span>Quét để vào đua!</span><span id="joinurl"></span></div>
 <div id="overlay"><div id="big"></div><div id="podium"></div></div>
 <div id="hint"></div>
+<ol id="top"></ol>
 <script>
   const $ = id => document.getElementById(id);
   const key = new URLSearchParams(location.search).get('key');
   const ctx = $('c').getContext('2d');
+  const sprites = Object.fromEntries(['scooter', 'pothole', 'impact'].map(name => {
+    const image = new Image();
+    image.src = `/assets/${name}.png`;
+    return [name, image];
+  }));
   const ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
   const shown = new Map(); // id -> vị trí đang vẽ, để xe chạy mượt giữa các lần nhận state
   let state = { phase: 'lobby', players: [], track: 100 };
@@ -57,6 +74,7 @@
   $('hint').textContent = key ? 'Space: bắt đầu / ván mới' : 'Chế độ xem: thêm ?key=… vào URL để điều khiển';
   ws.onopen = () => ws.send(JSON.stringify({ screen: true }));
   ws.onclose = () => { $('status').textContent = 'Mất kết nối server'; };
+  let top3 = new Set(); // id 3 người dẫn đầu, để tô sáng làn
   ws.onmessage = e => { state = JSON.parse(e.data); updateUI(); };
   addEventListener('keydown', e => {
     if (e.code === 'Space' && key && ws.readyState === 1) ws.send(JSON.stringify({ start: key }));
@@ -75,6 +93,14 @@
     $('podium').innerHTML = state.phase !== 'done' ? '' : state.players
       .filter(p => p.place).sort((a, b) => a.place - b.place).slice(0, 3)
       .map(p => `${['🥇', '🥈', '🥉'][p.place - 1]} ${esc(p.name)}`).join('<br>') || 'Không ai về đích 😅';
+
+    // giữ làn cố định theo thứ tự vào phòng, chỉ bảng top 5 là xếp theo hạng
+    state.players.forEach((p, i) => (p.lane = i + 1));
+    const ranked = state.players.filter(p => p.pos > 0)
+      .sort((a, b) => (a.place || 1e9) - (b.place || 1e9) || b.pos - a.pos);
+    top3 = new Set(ranked.slice(0, 3).map(p => p.id));
+    $('top').innerHTML = ranked.slice(0, 5)
+      .map(p => `<li style="--h:${p.hue}">${esc(p.name)}<small>làn ${p.lane}</small></li>`).join('');
   }
   const esc = s => s.replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`);
 
@@ -83,9 +109,18 @@
     ctx.translate(x, y);
     if (flip) ctx.scale(-1, 1); // emoji 🛵 của Apple quay đầu sang trái
     ctx.font = `${size}px serif`;
+    ctx.fillStyle = '#000'; // emoji màu vẫn ăn alpha của fillStyle, phải đặt màu đặc
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(ch, 0, 0);
     ctx.restore();
+  }
+
+  function sprite(name, x, y, width, height, fallback) {
+    const image = sprites[name];
+    if (!image.complete || !image.naturalWidth) return emoji(fallback, x, y, height, name === 'scooter');
+    const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+    const w = image.naturalWidth * scale, h = image.naturalHeight * scale;
+    ctx.drawImage(image, x - w / 2, y - h / 2, w, h);
   }
 
   function draw() {
@@ -95,8 +130,9 @@
     ctx.clearRect(0, 0, W, H);
 
     const ps = state.players, n = Math.max(ps.length, 1);
-    const top = 120, lane = Math.min(80, (H - top - 40) / n);
-    const x0 = 200, x1 = Math.max(x0 + 200, W - (state.phase === 'lobby' ? 400 : 80));
+    const lobby = state.phase === 'lobby';
+    const top = lobby ? 120 : 70, lane = Math.min(80, (H - top - (lobby ? 40 : 10)) / n);
+    const x0 = 200, x1 = Math.max(x0 + 200, W - (lobby ? 400 : 360)); // bên phải chừa cho QR + top 5
     const X = pos => x0 + (x1 - x0) * pos / state.track;
 
     // mặt đường
@@ -113,20 +149,31 @@
       const x = cur + (p.pos - cur) * 0.3;
       shown.set(p.id, x);
 
+      // nền làn theo màu người chơi (khớp màu nền điện thoại), top 3 sáng hơn + viền vàng
+      const lead = top3.has(p.id) && !lobby;
+      ctx.fillStyle = `hsl(${p.hue} 70% 50% / ${lead ? 0.35 : 0.13})`;
+      ctx.fillRect(x0 - 40, top + lane * i, x1 - x0 + 40, lane);
+      if (lead) { ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = 2; ctx.strokeRect(x0 - 39, top + lane * i + 1, x1 - x0 + 38, lane - 2); }
+
       if (i > 0) {
-        ctx.strokeStyle = '#ffffff33'; ctx.setLineDash([16, 12]);
+        ctx.strokeStyle = '#ffffff33'; ctx.lineWidth = 1; ctx.setLineDash([16, 12]);
         ctx.beginPath(); ctx.moveTo(x0 - 40, top + lane * i); ctx.lineTo(x1, top + lane * i); ctx.stroke();
         ctx.setLineDash([]);
       }
-      if (state.phase !== 'lobby') p.holes.forEach(h => emoji('🕳️', X(h), y, lane * 0.45));
-      emoji('🛵', X(x), y, lane * 0.7, true);
-      if (p.stun) emoji('💥', X(x), y - lane * 0.35, lane * 0.4);
+      if (state.phase !== 'lobby') p.holes.forEach(h => sprite('pothole', X(h), y, lane * 0.6, lane * 0.3, '🕳️'));
+      sprite('scooter', X(x), y, lane * 1.1, lane * 0.7, '🛵');
+      if (p.stun) sprite('impact', X(x), y - lane * 0.35, lane * 0.4, lane * 0.4, '💥');
       if (p.place) emoji(['🥇', '🥈', '🥉'][p.place - 1] || '🏁', X(x) + lane * 0.6, y, lane * 0.5);
 
-      ctx.fillStyle = '#fff';
-      ctx.font = `600 ${Math.max(10, Math.min(22, lane * 0.4))}px system-ui`;
-      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-      ctx.fillText(p.name, x0 - 50, y, x0 - 60);
+      // số làn ở mép trái; làn hẹp thì tên chạy theo sau xe để khỏi phải dò cả hàng
+      ctx.font = `700 ${Math.max(14, Math.min(22, lane * 0.5))}px system-ui`;
+      ctx.textBaseline = 'middle'; ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+      ctx.fillStyle = `hsl(${p.hue} 80% 72%)`;
+      ctx.textAlign = 'left'; ctx.fillText(i + 1, 12, y);
+      const nx = lane < 36 ? X(x) - lane * 0.6 : x0 - 50; // sprite xe rộng 1.1 làn
+      ctx.textAlign = 'right';
+      ctx.strokeText(p.name, nx, y, nx - 50);
+      ctx.fillText(p.name, nx, y, nx - 50);
     });
     for (const id of shown.keys()) if (!ps.some(p => p.id === id)) shown.delete(id);
 

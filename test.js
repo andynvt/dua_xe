@@ -13,6 +13,17 @@ function client(onMsg) {
 
 (async () => {
   await sleep(500);
+  for (const name of ['scooter', 'pothole', 'impact']) {
+    const res = await fetch(`http://localhost:${PORT}/assets/${name}.png`);
+    assert.equal(res.status, 200, `${name}: asset phải tải được`);
+    assert.equal(res.headers.get('content-type'), 'image/png');
+    const bytes = Buffer.from(await res.arrayBuffer());
+    assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  }
+  for (const pathname of ['/assets/missing.png', '/assets/../server.js', '/assets/%2e%2e%2fserver.js']) {
+    const res = await fetch(`http://localhost:${PORT}${pathname}`);
+    assert.equal(res.status, 404, `${pathname}: không được phục vụ file ngoài danh sách asset`);
+  }
   let screen = {}, cheat = {};
   const s = await client(m => (screen = m));
   s.send(JSON.stringify({ screen: true }));

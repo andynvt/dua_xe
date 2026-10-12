@@ -11,37 +11,51 @@
   .screen { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 20px; text-align: center; }
   [hidden] { display: none !important; }
   h1 { font-size: 2.2rem; margin: 0; }
+  .logo { width: 1.5em; height: 1.15em; object-fit: contain; vertical-align: middle; }
   input, button { font: inherit; border: 0; border-radius: 14px; }
   input { width: 100%; max-width: 320px; padding: 14px 16px; font-size: 1.2rem; text-align: center; }
   form button { padding: 14px 32px; background: #e8590c; color: #fff; font-size: 1.2rem; font-weight: 700; }
   form button:disabled { opacity: .4; }
-  #status { font-size: 1.4rem; font-weight: 700; min-height: 2em; }
-  #tap { width: min(80vw, 60vh); aspect-ratio: 1; border-radius: 50%; background: #e8590c; color: #fff;
+  #status { font-size: 1.2rem; font-weight: 700; min-height: 1.5em; }
+  /* nửa trên: đường đua + hạng, nửa dưới: nút tap to hết cỡ */
+  #game { justify-content: stretch; align-items: stretch; gap: 12px; padding: 12px 12px max(16px, env(safe-area-inset-bottom)); }
+  #view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+  #hud { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  #rank { font-size: 2.6rem; font-weight: 900; line-height: 1; }
+  #rank small { font-size: 1.2rem; color: #fff9; }
+  #track { flex: 1; min-height: 0; width: 100%; border-radius: 14px; background: #0004; }
+  #tap { flex: 1.2; min-height: 0; width: 100%; border-radius: 28px; background: #e8590c; color: #fff;
     font-size: 3rem; font-weight: 900; box-shadow: 0 10px 0 #a63e08; transition: transform .05s; }
+  #tap img { display: block; width: 40%; height: auto; max-height: 40%; object-fit: contain; margin: 0 auto 8px; pointer-events: none; }
   #tap.hit { transform: translateY(6px) scale(.97); box-shadow: 0 4px 0 #a63e08; }
   #tap.off { background: #555; box-shadow: 0 10px 0 #333; }
   #tap.stun { background: #c92a2a; box-shadow: 0 10px 0 #7d1a1a; }
-  #bar { width: 100%; max-width: 360px; height: 14px; background: #333; border-radius: 7px; overflow: hidden; }
-  #fill { height: 100%; width: 0; background: #2b8a3e; transition: width .1s; }
+  #me:empty { display: none; }
+  #me { font-size: 1.2rem; font-weight: 900; padding: 6px 20px; border-radius: 999px; border: 3px solid currentColor; }
 </style>
 </head>
 <body>
 <div id="join" class="screen">
-  <h1>🛵 Đua Xe Ôm</h1>
+  <h1><img class="logo" src="/assets/scooter.png" alt=""> Đua Xe Ôm</h1>
   <form id="form">
     <p><input id="name" maxlength="20" placeholder="Tên của bạn" autocomplete="off" required></p>
     <button id="go" disabled>Đang kết nối…</button>
   </form>
 </div>
 <div id="game" class="screen" hidden>
-  <div id="status">Chờ host bắt đầu…</div>
-  <button id="tap" class="off">🛵<br>TAP!</button>
-  <div id="bar"><div id="fill"></div></div>
+  <div id="view">
+    <div id="hud"><div id="me"></div><div id="rank"></div></div>
+    <canvas id="track"></canvas>
+    <div id="status">Chờ host bắt đầu…</div>
+  </div>
+  <button id="tap" class="off"><img src="/assets/scooter.png" alt="" draggable="false">TAP!</button>
 </div>
 <script>
   const $ = id => document.getElementById(id);
   const ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
-  let taps = 0, wasStun = false;
+  let taps = 0, wasStun = false, st = null, shown = 0;
+  const ctx = $('track').getContext('2d');
+  const sprites = Object.fromEntries(['scooter', 'pothole', 'impact'].map(n => { const i = new Image(); i.src = `/assets/${n}.png`; return [n, i]; }));
 
   $('name').value = localStorage.name || '';
   ws.onopen = () => { $('go').disabled = false; $('go').textContent = 'Vào đua'; };
@@ -66,21 +80,59 @@
 
   ws.onmessage = e => {
     const s = JSON.parse(e.data);
-    if (s.you || $('game').hidden) return;
+    if (s.you) { // nền điện thoại cùng màu với làn của mình trên màn hình lớn
+      document.body.style.background = `hsl(${s.hue} 45% 16%)`;
+      $('me').style.color = `hsl(${s.hue} 80% 72%)`;
+      return;
+    }
+    if ($('game').hidden) return;
+    $('me').textContent = `Làn ${s.lane}`;
     let text;
     if (s.phase === 'lobby') text = `Chờ host bắt đầu… (${s.total} tay đua)`;
     else if (s.phase === 'countdown') text = `Chuẩn bị… ${Math.ceil(s.cd / 1000)}`;
     else if (s.place) text = `🏁 Về đích hạng ${s.place}! ${['🥇', '🥈', '🥉'][s.place - 1] || '🎉'}`;
-    else if (s.phase === 'race') text = s.stun ? '💥 Sập ổ gà!' : `Hạng ${s.rank}/${s.total}. TAP liên tục!`;
+    else if (s.phase === 'race') text = s.stun ? '💥 Sập ổ gà!' : 'TAP liên tục!';
     else text = s.pos ? `Hết giờ! Bạn hạng ${s.rank}/${s.total}` : 'Chờ ván mới…';
     $('status').textContent = text;
-    $('fill').style.width = (100 * s.pos / s.track) + '%';
+    $('rank').innerHTML = s.phase === 'lobby' || s.phase === 'countdown' ? '' : `#${s.rank}<small>/${s.total}</small>`;
+    st = s;
     const racing = s.phase === 'race' && !s.place;
     $('tap').classList.toggle('off', !racing);
     $('tap').classList.toggle('stun', racing && s.stun);
     if (s.stun && !wasStun && navigator.vibrate) navigator.vibrate(200);
     wasStun = s.stun;
   };
+
+  function sprite(name, x, y, w, h) {
+    const i = sprites[name];
+    if (!i.naturalWidth) return;
+    const k = Math.min(w / i.naturalWidth, h / i.naturalHeight);
+    ctx.drawImage(i, x - i.naturalWidth * k / 2, y - i.naturalHeight * k / 2, i.naturalWidth * k, i.naturalHeight * k);
+  }
+  // làn của mình: mặt đường, ổ gà, vạch đích, xe chạy mượt giữa các lần nhận state
+  function draw() {
+    const c = $('track'), dpr = devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
+    if (c.width !== W * dpr || c.height !== H * dpr) { c.width = W * dpr; c.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    if (st) {
+      const lane = Math.min(H * 0.6, 120), y = H / 2, x0 = 36, x1 = W - 30;
+      const X = pos => x0 + (x1 - x0) * pos / st.track;
+      ctx.fillStyle = '#3d3b38'; ctx.fillRect(0, y - lane / 2, W, lane);
+      ctx.strokeStyle = '#fff6'; ctx.lineWidth = 2; ctx.setLineDash([14, 10]);
+      ctx.beginPath(); ctx.moveTo(0, y - lane / 2); ctx.lineTo(W, y - lane / 2); ctx.moveTo(0, y + lane / 2); ctx.lineTo(W, y + lane / 2); ctx.stroke();
+      ctx.setLineDash([]);
+      const sq = lane / 8;
+      for (let r = 0; r < 8; r++) for (let k = 0; k < 2; k++) { ctx.fillStyle = (r + k) % 2 ? '#fff' : '#111'; ctx.fillRect(x1 + k * sq, y - lane / 2 + r * sq, sq, sq); }
+      if (st.phase !== 'lobby') (st.holes || []).forEach(h => sprite('pothole', X(h), y, lane * 0.5, lane * 0.3));
+      shown += (st.pos - shown) * 0.3;
+      if (st.pos < shown) shown = st.pos; // ván mới thì về vạch xuất phát ngay
+      sprite('scooter', X(shown), y, lane * 0.9, lane * 0.6);
+      if (st.stun) sprite('impact', X(shown), y - lane * 0.3, lane * 0.35, lane * 0.35);
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
 </script>
 </body>
 </html>

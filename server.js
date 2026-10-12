@@ -19,12 +19,27 @@ async function joinUrl(req) {
 }
 
 const pages = { '/': 'phone.html', '/screen': 'screen.html' };
+const assets = {
+  '/assets/scooter.png': 'assets/scooter.png',
+  '/assets/pothole.png': 'assets/pothole.png',
+  '/assets/impact.png': 'assets/impact.png',
+};
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/join') {
     const u = await joinUrl(req);
     res.writeHead(200, { 'content-type': 'application/json' });
     return res.end(JSON.stringify({ url: u, svg: await QRCode.toString(u, { type: 'svg', margin: 1 }) }));
+  }
+  if (assets[url.pathname]) {
+    try {
+      const image = await fs.promises.readFile(path.join(__dirname, assets[url.pathname]));
+      res.writeHead(200, { 'content-type': 'image/png' });
+      return res.end(image);
+    } catch (err) {
+      res.writeHead(err.code === 'ENOENT' ? 404 : 500);
+      return res.end();
+    }
   }
   const page = pages[url.pathname];
   if (!page) { res.writeHead(404); return res.end(); }
@@ -64,10 +79,11 @@ wss.on('connection', ws => {
     let d; try { d = JSON.parse(raw); } catch { return; }
     if (!d || typeof d !== 'object') return;
     if (d.join && !players.has(ws) && players.size < MAX_PLAYERS) {
-      const p = { id: nextId++, name: String(d.join).trim().slice(0, 20) || 'Ẩn danh',
+      // hue theo góc vàng 137.5° để 2 người vào liền nhau có màu khác hẳn
+      const p = { id: nextId, hue: nextId++ * 137.5 % 360, name: String(d.join).trim().slice(0, 20) || 'Ẩn danh',
         pos: 0, place: 0, stunUntil: 0, holes: randomHoles(), budget: TAP_BURST, lastTap: Date.now() };
       players.set(ws, p);
-      ws.send(JSON.stringify({ you: p.id }));
+      ws.send(JSON.stringify({ you: p.id, hue: p.hue }));
     }
     if (d.taps && players.has(ws)) addTaps(players.get(ws), d.taps);
     if (d.screen) screens.add(ws);
@@ -89,10 +105,11 @@ setInterval(() => {
 
   // màn hình nhận toàn bộ state, điện thoại chỉ nhận phần của mình để tunnel không bị nghẽn
   const full = JSON.stringify({ phase: game.phase, cd, track: TRACK,
-    players: ps.map(p => ({ id: p.id, name: p.name, pos: p.pos, place: p.place, stun: now < p.stunUntil, holes: p.holes })) });
+    players: ps.map(p => ({ id: p.id, hue: p.hue, name: p.name, pos: p.pos, place: p.place, stun: now < p.stunUntil, holes: p.holes })) });
   for (const s of screens) s.send(full);
+  let lane = 0; // cùng thứ tự với ps nên khớp số làn trên màn hình
   for (const [ws, p] of players)
-    ws.send(JSON.stringify({ phase: game.phase, cd, track: TRACK, pos: p.pos, place: p.place,
+    ws.send(JSON.stringify({ phase: game.phase, cd, track: TRACK, lane: ++lane, pos: p.pos, place: p.place, holes: p.holes,
       stun: now < p.stunUntil, rank: rank.get(p), total: ps.length }));
 }, 50);
 
